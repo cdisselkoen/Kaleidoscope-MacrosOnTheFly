@@ -46,7 +46,7 @@ void FlashOverride::loopHook(bool postClear) {
 }
 
 void FlashOverride::unFlash() {
-  if(flashWholeKeyboard) ::LEDControl.reactivate();
+  if(flashWholeKeyboard) ::LEDControl.refreshAll();
   else ::LEDControl.refreshAt(flashedLEDRow, flashedLEDCol);
 }
 
