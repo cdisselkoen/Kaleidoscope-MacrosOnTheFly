@@ -13,7 +13,7 @@ This plugin allows you to record and playback macros on-the-fly.  Do any
 sequence of keystrokes once, then repeat it with the tap of a button.  Some
 possible uses including typing some text over and over; invoking a complicated
 shortcut several times; or (for programmers like me) making the same modification
-to several different lines of code.  Furthermore, you can have up to 63
+to several different lines of code.  Furthermore, you can have many
 different macros stored at once, and play back any of them at any time.  The
 possibilities are limited only by your imagination.
 
@@ -32,11 +32,11 @@ recording and playing back on the fly.  Also, macros recorded on the fly will
 be cleared whenever the keyboard loses power, whereas macros from the Macros
 plugin are permanent (until you reflash your firmware, that is).
 
-If the only reason you want to use this plugin over Macros is to because of its 63
-different macro slots, consider adding a new layer to your keymap and marking
-it up with macros from Macros (you can access this layer in any number of ways,
-including with a ![OneShot](https://github.com/keyboardio/Kaleidoscope-OneShot)
-key).
+If the only reason you want to use this plugin over Macros is to because of the
+large number of macros in can store at once, consider adding a new layer to your
+keymap and marking it up with macros from Macros (you can access this layer in
+any number of ways, including with a
+![OneShot](https://github.com/keyboardio/Kaleidoscope-OneShot) key).
 
 If you're excited by the ability to create custom key-sequences
 on demand that are tailored to your particular situation, and work in any
@@ -202,6 +202,14 @@ you've already recorded (just record an empty macro over them, using
 `Key_MacroRec`+key+`Key_MacroRec`), or reset everything by powering your
 keyboard off and on, which will clear all your stored macros.
 
+* Likewise, although you conceptually have 63 different macro slots and can
+use any of them, you're restricted in how many can have macros at once.
+(Currently the limit is 16 slots simultaneously in use.  Empty macros, that
+contain 0 keystrokes, don't count toward the total.)  Again, you can
+free up macro slots by deleting macros you've already recorded {just record
+an empty macro over them), or by powering your keyboard off and on, which
+will clear all your stored macros.
+
 * Recorded macros remain in your keyboard until you record over them, or until
 the keyboard loses power.  If you want your macros to stay in the keyboard
 even after it loses power, use the
@@ -209,7 +217,8 @@ even after it loses power, use the
 
 * This plugin is a big hog of RAM, which means you can't use it simultaneously
 with a complicated Kaleidoscope sketch using a lot of other plugins.
-Reducing the RAM usage of this plugin is something I'm actively working on.
+A recent commit reduced the RAM usage by around 200 bytes, but there's still
+room for improvement.
 
 ## Dependencies
 

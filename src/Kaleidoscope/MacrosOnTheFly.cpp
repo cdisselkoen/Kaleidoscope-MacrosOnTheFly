@@ -48,22 +48,28 @@ cRGB MacrosOnTheFly::failColor = CRGB(200,0,0);
 cRGB MacrosOnTheFly::playColor = CRGB(0,255,0);
 cRGB MacrosOnTheFly::emptyColor = CRGB(255,0,0);
 MacrosOnTheFly::Entry MacrosOnTheFly::macroStorage[MacrosOnTheFly::STORAGE_SIZE_IN_KEYSTROKES];
-MacrosOnTheFly::Slot MacrosOnTheFly::slots[MacrosOnTheFly::NUM_SLOTS];
+MacrosOnTheFly::Slot MacrosOnTheFly::slots[MacrosOnTheFly::MAX_SLOTS_SIMULTANEOUSLY_IN_USE];
 MacrosOnTheFly::State MacrosOnTheFly::currentState = MacrosOnTheFly::IDLE;
 bool MacrosOnTheFly::recording = false;
 uint8_t MacrosOnTheFly::lastPlayedSlot = 0;
-uint8_t MacrosOnTheFly::slotRow;
-uint8_t MacrosOnTheFly::slotCol;
+uint8_t MacrosOnTheFly::recordingSlot = 0;
 uint8_t MacrosOnTheFly::play_row;
 uint8_t MacrosOnTheFly::play_col;
 uint8_t MacrosOnTheFly::rec_row;
 uint8_t MacrosOnTheFly::rec_col;
+uint8_t MacrosOnTheFly::slot_row;
+uint8_t MacrosOnTheFly::slot_col;
 FlashOverride MacrosOnTheFly::flashOverride;
 
 bool MacrosOnTheFly::prepareForRecording(uint8_t row, uint8_t col) {
-  const uint8_t slotnum = slotNum(row, col);
+  const int8_t slotnum = findSlot(row, col);
+  if(slotnum < 0) return false;  // this key didn't have a slot already, and there aren't any unassigned slots.  I.e. reached MAX_SLOTS_SIMULTANEOUSLY_IN_USE
   free(slotnum);  // remove any macro that previously existed in this slot
   Slot& slot = slots[slotnum];
+
+  // assign this slot to this key
+  slot.row = row;
+  slot.col = col;
 
   const uint8_t lfSlotnum = getLargestFreeSlot();  // could be the same as slotnum
   Slot& lfSlot = slots[lfSlotnum];
@@ -92,8 +98,9 @@ bool MacrosOnTheFly::prepareForRecording(uint8_t row, uint8_t col) {
   // Take the free space we just acquired, away from lfSlot
   lfSlot.allocatedSize = lfSlot.usedSize;
 
-  slotRow = row;
-  slotCol = col;
+  recordingSlot = slotnum;
+  slot_row = row;
+  slot_col = col;
   return true;
 }
 
@@ -134,10 +141,22 @@ void MacrosOnTheFly::free(uint8_t slotnum) {
   }
 }
 
+int8_t MacrosOnTheFly::findSlot(uint8_t row, uint8_t col) {
+  for(uint8_t slotnum = 0; slotnum < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; slotnum++) {
+    Slot& slot = slots[slotnum];
+    if(slot.row == row && slot.col == col) return slotnum;
+  }
+  for(uint8_t slotnum = 0; slotnum < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; slotnum++) {
+    Slot& slot = slots[slotnum];
+    if(slot.usedSize == 0) return slotnum;
+  }
+  return -1;
+}
+
 uint8_t MacrosOnTheFly::getLargestFreeSlot() {
   uint8_t largestFreeSlot = 0;
   uint8_t largestFreeSize = 0;
-  for(uint8_t candidate = 0; candidate < NUM_SLOTS; candidate++) {
+  for(uint8_t candidate = 0; candidate < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; candidate++) {
     Slot& slot = slots[candidate];
     uint8_t freeSize = slot.allocatedSize - slot.usedSize;
     if(freeSize > largestFreeSize) {
@@ -149,12 +168,11 @@ uint8_t MacrosOnTheFly::getLargestFreeSlot() {
 }
 
 bool MacrosOnTheFly::recordKeystroke(Key key, uint8_t key_state) {
-  uint8_t slotnum = slotNum(slotRow, slotCol);
-  Slot& slot = slots[slotnum];
+  Slot& slot = slots[recordingSlot];
   if(slot.allocatedSize == 0) {
     // no room
     debug_print("MacrosOnTheFly: recordKeystroke: no room, allocatedSize is 0\n");
-    free(slotnum);
+    free(recordingSlot);
     return false;
   }
 
@@ -177,7 +195,7 @@ bool MacrosOnTheFly::recordKeystroke(Key key, uint8_t key_state) {
   if(slot.usedSize == slot.allocatedSize) {
     // no more room
     debug_print("MacrosOnTheFly: recordKeystroke: no room, usedSize = allocatedSize = %d\n", slot.usedSize);
-    free(slotnum);
+    free(recordingSlot);
     return false;
   }
 
@@ -268,11 +286,13 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
       bool success;
       if(mapped_key.raw == MACROPLAY) {
-        success = play(lastPlayedSlot);
+        success = lastPlayedSlot < MAX_SLOTS_SIMULTANEOUSLY_IN_USE && play(lastPlayedSlot);
       } else {
-        uint8_t slotnum = slotNum(row,col);
-        success = play(slotnum);
+        int8_t slotnum = findSlot(row,col);
+        success = slotnum >= 0 && play(slotnum);
         lastPlayedSlot = slotnum;
+        // note that lastPlayedSlot is unsigned, and slotnum is signed.
+        // if slotnum was < 0, lastPlayedSlot is now > 127 and we assume > MAX_SLOTS_SIMULTANEOUSLY_IN_USE
       }
       if(colorEffects) {
         if(success) LED_play_success();
@@ -322,7 +342,7 @@ void MacrosOnTheFly::loopHook(bool postClear) {
       if(recording) {
         debug_print("IDLE, recording\n");
         ::LEDControl.setCrgbAt(rec_row, rec_col, recordColor);
-        ::LEDControl.setCrgbAt(slotRow, slotCol, slotColor);
+        ::LEDControl.setCrgbAt(slot_row, slot_col, slotColor);
       } else {
         debug_print("IDLE, not recording\n");
       }

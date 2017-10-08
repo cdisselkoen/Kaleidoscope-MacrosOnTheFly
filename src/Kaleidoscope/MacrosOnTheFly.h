@@ -61,6 +61,18 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   // This could also be adjusted lower to save space, at the cost
   //   of more likely the user hits the limit
 
+  static const uint8_t MAX_SLOTS_SIMULTANEOUSLY_IN_USE = 16;
+  // allow this many slots to be simultaneously in use.
+  // Adjusting this higher, again, uses more space (RAM);
+  //   adjusting it lower uses less space.
+  // If you want this to be as high as possible (i.e. equal to
+  //   the number of physical keys - 1), check out the all-slots
+  //   branch, which may have a few (both space and time) advantages
+  //   for that case vs. just changing the number here.
+  // Also, this can't ever be higher than 127 (currently), as some
+  //   code assumes that we can cover all in-use slot indexes with a
+  //   int8_t
+
 #define UP WAS_PRESSED
 #define DOWN IS_PRESSED
 #define TAP (UP | DOWN)
@@ -74,6 +86,8 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static Entry macroStorage[STORAGE_SIZE_IN_KEYSTROKES];
 
   typedef struct Slot_ {
+    uint8_t row, col;  // which physical key location this Slot is associated with
+                       // These fields will be invalid if allocatedSize == 0
     uint8_t macroStart;  // index in macroStorage where this Slot's macro is stored
     uint8_t usedSize;  // number of entries in macroStorage that this Slot's macro uses
                         // (0 if the Slot is currently free / contains an empty macro)
@@ -84,8 +98,7 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
                        // This field will be invalid if macroStart + allocatedSize == STORAGE_SIZE_IN_KEYSTROKES, or if allocatedSize == 0.
   } Slot;
 
-  static const uint8_t NUM_SLOTS = ROWS*COLS;  // One for each physical key.  The one for the Key_MacroPlay key will be unused.
-  static Slot slots[NUM_SLOTS];
+  static Slot slots[MAX_SLOTS_SIMULTANEOUSLY_IN_USE];
 
   typedef enum State_ {
     IDLE,
@@ -96,8 +109,8 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static bool recording;
   static uint8_t lastPlayedSlot;
 
-  static uint8_t slotRow, slotCol;  // if we are currently recording, which slot
-  static inline uint8_t slotNum(uint8_t row, uint8_t col) { return row*ROWS + col; }
+  static uint8_t recordingSlot;  // if we are currently recording, which slot index
+  static int8_t findSlot(uint8_t row, uint8_t col);  // gives the index of the Slot currently associated with (row, col); or if no such Slot, then a currently unassigned Slot; or if no such Slot and no unassigned Slots, then -1
 
   static bool prepareForRecording(uint8_t row, uint8_t col);  // returns FALSE if there is no free space
   static bool recordKeystroke(Key key, uint8_t key_state);  // returns FALSE if there was not enough room
@@ -118,6 +131,8 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
 
   // keep track of where Key_MacroRec and Key_MacroPlay are for LED purposes
   static uint8_t play_row, play_col, rec_row, rec_col;
+  // keep track of where the currently-recording-slot is for LED purposes
+  static uint8_t slot_row, slot_col;
 
   static FlashOverride flashOverride;
 };
