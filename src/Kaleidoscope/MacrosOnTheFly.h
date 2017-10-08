@@ -118,7 +118,7 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static bool play(uint8_t slotnum);  // returns FALSE if the slot was empty
 
   static void free(uint8_t slotnum);
-  static uint8_t getLargestFreeSlot();  // slot with the largest 'free' portion (allocated minus used)
+  static uint8_t getSlotWithMostExtraSpace();  // slot with the largest 'free' portion (allocated minus used)
 
   static Key eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state);
   static void loopHook(bool postClear);

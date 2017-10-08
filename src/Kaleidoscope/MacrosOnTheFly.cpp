@@ -71,7 +71,7 @@ bool MacrosOnTheFly::prepareForRecording(uint8_t row, uint8_t col) {
   slot.row = row;
   slot.col = col;
 
-  const uint8_t lfSlotnum = getLargestFreeSlot();  // could be the same as slotnum
+  const uint8_t lfSlotnum = getSlotWithMostExtraSpace();  // could be the same as slotnum
   Slot& lfSlot = slots[lfSlotnum];
   const uint8_t freeSize = lfSlot.allocatedSize - lfSlot.usedSize;
   if(freeSize == 0) return false;
@@ -153,18 +153,18 @@ int8_t MacrosOnTheFly::findSlot(uint8_t row, uint8_t col) {
   return -1;
 }
 
-uint8_t MacrosOnTheFly::getLargestFreeSlot() {
-  uint8_t largestFreeSlot = 0;
-  uint8_t largestFreeSize = 0;
+uint8_t MacrosOnTheFly::getSlotWithMostExtraSpace() {
+  uint8_t winningSlot = 0;
+  uint8_t winningExtraSpace = 0;  // how much extra space in the winningSlot
   for(uint8_t candidate = 0; candidate < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; candidate++) {
     Slot& slot = slots[candidate];
-    uint8_t freeSize = slot.allocatedSize - slot.usedSize;
-    if(freeSize > largestFreeSize) {
-      largestFreeSlot = candidate;
-      largestFreeSize = freeSize;
+    uint8_t extraSpace = slot.allocatedSize - slot.usedSize;
+    if(extraSpace > winningExtraSpace) {
+      winningSlot = candidate;
+      winningExtraSpace = extraSpace;
     }
   }
-  return largestFreeSlot;
+  return winningSlot;
 }
 
 bool MacrosOnTheFly::recordKeystroke(Key key, uint8_t key_state) {
