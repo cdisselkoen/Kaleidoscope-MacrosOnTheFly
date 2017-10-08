@@ -91,6 +91,7 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
     uint8_t macroStart;  // index in macroStorage where this Slot's macro is stored
     uint8_t usedSize;  // number of entries in macroStorage that this Slot's macro uses
                         // (0 if the Slot is currently free / contains an empty macro)
+                        // Must not exceed allocatedSize.
     uint8_t allocatedSize;  // number of entries in macroStorage that this Slot is currently allocated
     uint8_t previousSlot;  // the Slot which holds the memory immediately before this Slot's.
                            // This field will be invalid if macroStart == 0, or if allocatedSize == 0.
