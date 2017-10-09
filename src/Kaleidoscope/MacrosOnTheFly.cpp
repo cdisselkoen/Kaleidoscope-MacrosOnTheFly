@@ -28,15 +28,13 @@
 namespace kaleidoscope {
 
 MacrosOnTheFly::MacrosOnTheFly(void) {
-  for(Slot& slot : slots) {
-    slot.macroStart = 0;
-    slot.usedSize = 0;
-    slot.allocatedSize = 0;
-  }
-  // Give the 0th slot all the free space to start with.
-  // This is an arbitrary choice.  It's important that all the free space is
-  //   in one big block, but completely unimportant who 'owns' the block.
-  slots[0].allocatedSize = STORAGE_SIZE_IN_KEYSTROKES;
+  // Initialize the 0th slot to indicate that the rest of the space is free
+  Slot* slot = (Slot*)&macroStorage[0];
+  slot->row = 255;
+  slot->col = 255;
+  slot->previousSlot = -1;  // previousSlot is unsigned, so this will give the max value the type can hold
+  slot->numAllocatedKeystrokes = (STORAGE_SIZE_IN_BYTES - sizeof(Slot)) / sizeof(Entry);
+  slot->numUsedKeystrokes = 0;
 }
 
 // all our (non-const) static member variables
@@ -47,168 +45,141 @@ cRGB MacrosOnTheFly::successColor = CRGB(0,200,0);
 cRGB MacrosOnTheFly::failColor = CRGB(200,0,0);
 cRGB MacrosOnTheFly::playColor = CRGB(0,255,0);
 cRGB MacrosOnTheFly::emptyColor = CRGB(255,0,0);
-MacrosOnTheFly::Entry MacrosOnTheFly::macroStorage[MacrosOnTheFly::STORAGE_SIZE_IN_KEYSTROKES];
-MacrosOnTheFly::Slot MacrosOnTheFly::slots[MacrosOnTheFly::MAX_SLOTS_SIMULTANEOUSLY_IN_USE];
+byte MacrosOnTheFly::macroStorage[MacrosOnTheFly::STORAGE_SIZE_IN_BYTES];
 MacrosOnTheFly::State MacrosOnTheFly::currentState = MacrosOnTheFly::IDLE;
 bool MacrosOnTheFly::recording = false;
-uint8_t MacrosOnTheFly::lastPlayedSlot = 0;
-uint8_t MacrosOnTheFly::recordingSlot = 0;
+uint16_t MacrosOnTheFly::recordingSlot;
+uint16_t MacrosOnTheFly::lastPlayedSlot = 0;
 uint8_t MacrosOnTheFly::play_row;
 uint8_t MacrosOnTheFly::play_col;
 uint8_t MacrosOnTheFly::rec_row;
 uint8_t MacrosOnTheFly::rec_col;
-uint8_t MacrosOnTheFly::slot_row;
-uint8_t MacrosOnTheFly::slot_col;
 FlashOverride MacrosOnTheFly::flashOverride;
 
-bool MacrosOnTheFly::prepareForRecording(uint8_t row, uint8_t col) {
-  const int8_t slotnum = findSlot(row, col);
-  if(slotnum < 0) return false;  // this key didn't have a slot already, and there aren't any unassigned slots.  I.e. reached MAX_SLOTS_SIMULTANEOUSLY_IN_USE
-  free(slotnum);  // remove any macro that previously existed in this slot
-  Slot& slot = slots[slotnum];
-
-  // assign this slot to this key
-  slot.row = row;
-  slot.col = col;
-
-  const uint8_t lfSlotnum = getSlotWithMostExtraSpace();  // could be the same as slotnum
-  Slot& lfSlot = slots[lfSlotnum];
-  const uint8_t freeSize = lfSlot.allocatedSize - lfSlot.usedSize;
-  if(freeSize == 0) return false;
-
-  // adjust slot's macroStart, usedSize, and allocatedSize
-  slot.macroStart = lfSlot.macroStart + lfSlot.usedSize;
-  slot.allocatedSize = freeSize;  // give it everything lfSlot wasn't using
-  // slot.usedSize is already 0 from the free() earlier
-
-  // make slot's previousSlot and nextSlot point to the right Slot
-  if(lfSlot.usedSize == 0) slot.previousSlot = lfSlot.previousSlot;  // remove lfSlot from the linked list
-  else if(slotnum == lfSlotnum) {}  // keep the same previousSlot
-  else slot.previousSlot = lfSlotnum;
-  slot.nextSlot = lfSlot.nextSlot;  // if lfSlot.nextSlot was invalid so is ours
-
-  // make the nextSlot and previousSlot point to us as appropriate
-  if(lfSlot.macroStart + lfSlot.allocatedSize < STORAGE_SIZE_IN_KEYSTROKES) {  // then lfSlot.nextSlot is valid
-    slots[slot.nextSlot].previousSlot = slotnum;
+bool MacrosOnTheFly::prepareForRecording(const uint8_t row, const uint8_t col) {
+  int16_t index = findSlot(row, col);
+  if(index >= 0) {
+    // this physical key already had a Slot associated with it
+    // Clear out any macro that previously existed for this key so we can start anew
+    free(index);
   }
-  if(slot.macroStart != 0) {  // then slot.previousSlot is valid
-    slots[slot.previousSlot].nextSlot = slotnum;  // means lfSlot.nextSlot = slotnum, unless we removed lfSlot from the linked list earlier
-  }
+  // At this point we know there is no Slot associated with this physical key
+  index = newSlot(row, col);
+  if(index < 0) return false;  // not enough room to create a new Slot
 
-  // Take the free space we just acquired, away from lfSlot
-  lfSlot.allocatedSize = lfSlot.usedSize;
-
-  recordingSlot = slotnum;
-  slot_row = row;
-  slot_col = col;
+  recordingSlot = index;
   return true;
 }
 
-// Not only sets usedSize to 0, but also (tries to) set allocatedSize to 0
-void MacrosOnTheFly::free(uint8_t slotnum) {
-  Slot& slot = slots[slotnum];
+void MacrosOnTheFly::free(const uint16_t index) {
+  Slot* slot = (Slot*)&macroStorage[index];
+  if(index == 0) {
+    // don't actually delete the Slot structure, just mark it all as extra space
+    slot->row = 255;
+    slot->col = 255;
+    slot->numUsedKeystrokes = 0;
+  } else {
+    // give all this slot's space, plus the space taken up by its Slot structure itself, to previous Slot
+    Slot* previousSlot = (Slot*)&macroStorage[slot->previousSlot];
+    uint16_t bytesToGive = sizeof(Slot) + sizeof(Entry)*slot->numAllocatedKeystrokes;
+    previousSlot->numAllocatedKeystrokes += bytesToGive / sizeof(Entry);
+  }
+}
 
-  if(slot.allocatedSize == 0) return;  // nothing to do; usedSize is already 0, and previousSlot/nextSlot are invalid
+int16_t MacrosOnTheFly::findSlot(const uint8_t row, const uint8_t col) {
+  uint16_t index = 0;
+  while(true) {
+    Slot* slot = (Slot*)&macroStorage[index];
+    if(slot->row == row && slot->col == col) return index;
+    index += sizeof(Slot) + sizeof(Entry)*slot->numAllocatedKeystrokes;
+    if(index > STORAGE_SIZE_IN_BYTES-sizeof(Slot)) return -1;
+  }
+}
 
-  slot.usedSize = 0;
+int16_t MacrosOnTheFly::newSlot(const uint8_t row, const uint8_t col) {
+  const uint16_t index = getSlotWithMostFreeSpace();
+  const uint16_t freeSpace = getFreeSpace(index);  // technically getSlotWithMostFreeSpace() already computed this
+  if(freeSpace < sizeof(Slot) + sizeof(Entry)) return false;  // not enough room for a 1-keystroke macro
 
-  bool nextSlotIsValid = (slot.macroStart + slot.allocatedSize < STORAGE_SIZE_IN_KEYSTROKES);
-  bool prevSlotIsValid = (slot.macroStart != 0);
+  Slot* slot = (Slot*)&macroStorage[index];
+  if(slot->row == 255 && slot->col == 255) {
+    // take over this Slot entirely
+    slot->row = row;
+    slot->col = col;
+    // numUsedKeystrokes is already 0 - this is a property of (255,255) Slots
+    return index;
+  } else {
+    // allocate ourselves a Slot using all of this one's free space
+    slot->numAllocatedKeystrokes = slot->numUsedKeystrokes;
+    uint16_t newIndex = index + sizeof(Slot) + sizeof(Entry)*slot->numUsedKeystrokes;
+    Slot* newSlot = (Slot*)&macroStorage[newIndex];
+    newSlot->row = row;
+    newSlot->col = col;
+    newSlot->previousSlot = index;
+    newSlot->numAllocatedKeystrokes = (freeSpace - sizeof(Slot)) / sizeof(Entry);
+    newSlot->numUsedKeystrokes = 0;
+    return newIndex;
+  }
+}
 
-  if(prevSlotIsValid) {
-    // Give our allocated space to the slot which holds the memory right before ours
-    slots[slot.previousSlot].allocatedSize += slot.allocatedSize;
-    slot.allocatedSize = 0;
-    slots[slot.previousSlot].nextSlot = slot.nextSlot;  // (works whether nextSlot is valid or not)
-  } else {  // slot.macroStart == 0
-    // we don't have a previousSlot. Try to give away our allocated space to another slot.
-    for(Slot& other : slots) {
-      if(other.allocatedSize == 0) {
-        other.macroStart = slot.macroStart;  // i.e. 0
-        other.allocatedSize = slot.allocatedSize;
-        other.nextSlot = slot.nextSlot;
-        slot.allocatedSize = 0;
-        break;
-      }
+uint16_t MacrosOnTheFly::getSlotWithMostFreeSpace() {
+  uint16_t winningSlot = 0;
+  uint16_t winningFreeSpace = 0;  // how much free space in the winningSlot
+  uint16_t index = 0;
+  while(true) {
+    uint16_t freeSpace = getFreeSpace(index);
+    if(freeSpace > winningFreeSpace) {
+      winningSlot = index;
+      winningFreeSpace = freeSpace;
     }
-    // if no other slots had allocatedSize 0, and we don't have a previousSlot to give our space to,
-    // we have no choice but to potentially leak our space.  Technically it won't be leaked if the
-    // caller is capable of handling the case where free() doesn't set allocatedSize to 0.
-  }
-  if(nextSlotIsValid && slot.allocatedSize == 0) {
-    // we succeeded in giving away our allocated space, and our nextSlot is valid and needs adjusting
-    slots[slot.nextSlot].previousSlot = slot.previousSlot;
+    Slot* slot = (Slot*)&macroStorage[index];
+    index += sizeof(Slot) + sizeof(Entry)*slot->numAllocatedKeystrokes;
+    if(index > STORAGE_SIZE_IN_BYTES-sizeof(Slot)) return winningSlot;
   }
 }
 
-int8_t MacrosOnTheFly::findSlot(uint8_t row, uint8_t col) {
-  for(uint8_t slotnum = 0; slotnum < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; slotnum++) {
-    Slot& slot = slots[slotnum];
-    if(slot.row == row && slot.col == col) return slotnum;
-  }
-  for(uint8_t slotnum = 0; slotnum < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; slotnum++) {
-    Slot& slot = slots[slotnum];
-    if(slot.usedSize == 0) return slotnum;
-  }
-  return -1;
+uint16_t MacrosOnTheFly::getFreeSpace(uint16_t index) {
+  Slot* slot = (Slot*)&macroStorage[index];
+  uint16_t freeSpace = sizeof(Entry) * (slot->numAllocatedKeystrokes - slot->numUsedKeystrokes);
+  if(slot->row == 255 && slot->col == 255) freeSpace += sizeof(Slot);
+  return freeSpace;
 }
 
-uint8_t MacrosOnTheFly::getSlotWithMostExtraSpace() {
-  uint8_t winningSlot = 0;
-  uint8_t winningExtraSpace = 0;  // how much extra space in the winningSlot
-  for(uint8_t candidate = 0; candidate < MAX_SLOTS_SIMULTANEOUSLY_IN_USE; candidate++) {
-    Slot& slot = slots[candidate];
-    uint8_t extraSpace = slot.allocatedSize - slot.usedSize;
-    if(extraSpace > winningExtraSpace) {
-      winningSlot = candidate;
-      winningExtraSpace = extraSpace;
-    }
-  }
-  return winningSlot;
-}
-
-bool MacrosOnTheFly::recordKeystroke(Key key, uint8_t key_state) {
-  Slot& slot = slots[recordingSlot];
-  if(slot.allocatedSize == 0) {
-    // no room
-    debug_print("MacrosOnTheFly: recordKeystroke: no room, allocatedSize is 0\n");
-    free(recordingSlot);
-    return false;
-  }
-
+bool MacrosOnTheFly::recordKeystroke(const Key key, const uint8_t key_state) {
   if(!keyToggledOn(key_state) && !keyToggledOff(key_state)) {
     // we only care about toggle events. Carry on.
     return true;
   }
 
-  if(slot.usedSize > 0  // at least one action already recorded
+  Slot* slot = (Slot*)&macroStorage[recordingSlot];
+  if(slot->numUsedKeystrokes > 0  // at least one action already recorded
       && keyToggledOff(key_state)) {
-    Entry& prev_entry = macroStorage[slot.macroStart + slot.usedSize - 1];  // the most recent entry recorded
+    // If this is an UP, and the last action was a DOWN for the same key, combine these into a TAP.
+    // This can save a significant amount of storage for long macros that contain a lot of TAPs.
+    Entry& prev_entry = slot->keystrokes[slot->numUsedKeystrokes-1];  // the most recent entry recorded
     if(prev_entry.key == key && prev_entry.state == DOWN) {
-      prev_entry.state = TAP;  // If this is an UP, and the last action was a DOWN for the same key,
-                                // combine these into a TAP.  This can save a significant amount of storage
-                                // for long macros that contain a lot of TAPs.
+      prev_entry.state = TAP;
       return true;
     }
   }
 
-  if(slot.usedSize == slot.allocatedSize) {
+  if(slot->numUsedKeystrokes == slot->numAllocatedKeystrokes) {
     // no more room
-    debug_print("MacrosOnTheFly: recordKeystroke: no room, usedSize = allocatedSize = %d\n", slot.usedSize);
+    debug_print("MacrosOnTheFly: recordKeystroke: no room, used = allocated = %u\n", slot->numUsedKeystrokes);
     free(recordingSlot);
     return false;
   }
 
-  Entry& entry = macroStorage[slot.macroStart + slot.usedSize++];
+  Entry& entry = slot->keystrokes[slot->numUsedKeystrokes++];
   entry.key = key;
   entry.state = key_state & TAP;  // remove any other flags from the key state
   return true;
 }
 
-bool MacrosOnTheFly::play(uint8_t slotnum) {
-  Slot& slot = slots[slotnum];
-  for(uint8_t i = 0; i < slot.usedSize; i++) {
-    Entry entry = macroStorage[slot.macroStart + i];
+bool MacrosOnTheFly::play(const uint16_t index) {
+  Slot* slot = (Slot*)&macroStorage[index];
+  for(uint8_t i = 0; i < slot->numUsedKeystrokes; i++) {
+    Entry& entry = slot->keystrokes[i];
     if(keyIsPressed(entry.state)) {
       handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED | INJECTED);
       kaleidoscope::hid::sendKeyboardReport();
@@ -218,7 +189,7 @@ bool MacrosOnTheFly::play(uint8_t slotnum) {
       kaleidoscope::hid::sendKeyboardReport();
     }
   }
-  return (slot.usedSize > 0);
+  return (slot->numUsedKeystrokes > 0);
 }
 
 void MacrosOnTheFly::begin(void) {
@@ -286,13 +257,13 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
       bool success;
       if(mapped_key.raw == MACROPLAY) {
-        success = lastPlayedSlot < MAX_SLOTS_SIMULTANEOUSLY_IN_USE && play(lastPlayedSlot);
+        success = play(lastPlayedSlot);
       } else {
-        int8_t slotnum = findSlot(row,col);
-        success = slotnum >= 0 && play(slotnum);
-        lastPlayedSlot = slotnum;
-        // note that lastPlayedSlot is unsigned, and slotnum is signed.
-        // if slotnum was < 0, lastPlayedSlot is now > 127 and we assume > MAX_SLOTS_SIMULTANEOUSLY_IN_USE
+        int16_t index = findSlot(row,col);
+        success = index >= 0 && play(index);
+        if(success) lastPlayedSlot = index;
+        // we ensure that lastPlayedSlot always points to a valid Slot
+        //   (and not, for instance, -1)
       }
       if(colorEffects) {
         if(success) LED_play_success();
@@ -317,11 +288,11 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   return mapped_key;
 }
 
-void MacrosOnTheFly::LED_record_fail(uint8_t row, uint8_t col) {
+void MacrosOnTheFly::LED_record_fail(const uint8_t row, const uint8_t col) {
   flashOverride.flashAllLEDs(failColor);
 }
 
-void MacrosOnTheFly::LED_record_success(uint8_t row, uint8_t col) {
+void MacrosOnTheFly::LED_record_success(const uint8_t row, const uint8_t col) {
   flashOverride.flashAllLEDs(successColor);
 }
 
@@ -342,7 +313,8 @@ void MacrosOnTheFly::loopHook(bool postClear) {
       if(recording) {
         debug_print("IDLE, recording\n");
         ::LEDControl.setCrgbAt(rec_row, rec_col, recordColor);
-        ::LEDControl.setCrgbAt(slot_row, slot_col, slotColor);
+        Slot* slot = (Slot*)&macroStorage[recordingSlot];
+        ::LEDControl.setCrgbAt(slot->row, slot->col, slotColor);
       } else {
         debug_print("IDLE, not recording\n");
       }

@@ -46,60 +46,72 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static cRGB emptyColor;
 
  private:
-  static const uint8_t STORAGE_SIZE_IN_KEYSTROKES = 150;
-  // space for this many keystrokes total, across all recorded macros
-  // Obviously this could be adjusted higher, at the cost of
-  //   this plugin using more space in the firmware image.
-  // To be adjusted over 255, you need to increase the
-  //   'macroStart', 'usedSize', and 'allocatedSize' fields in
-  //   the Slot struct below to 16 bits each, and likewise
-  //   some local variables in the .cpp file that hold size-
-  //   related values.  (And this constant, of course.)
-  // (Or some extra code could manually limit macros to 255
-  //   keystrokes each, and keep 'usedSize' at 8 bits, even if
-  //   'macroStart' and 'allocatedSize' still need to be 16 bits each.)
-  // This could also be adjusted lower to save space, at the cost
-  //   of more likely the user hits the limit
+  /* Number of bytes of RAM to reserve for macro storage.
+   * Each slot used requires one Slot object from this, and each keystroke that
+   *   is part of a macro requires one Entry object.
+   * Currently this means 6 bytes per slot used, plus 3 bytes per keystroke
+   *   stored across all recorded macros.
+   * Obviously this could be adjusted higher, at the cost of this plugin using
+   *   more space in the firmware image.
+   * To adjust this higher than sizeof(Slot) + 3*255 (so currently 771 bytes),
+   *   you'll need to increase numAllocatedKeystrokes to a uint16_t in the Slot
+   *   object, and either also numUsedKeystrokes to uint16_t, or insert extra
+   *   logic to limit numUsedKeystrokes to 255 even when numAllocatedKeystrokes
+   *   is higher.  (Some local variables in MacrosOnTheFly.cpp may also need to
+   *   be increased to uint16_t.)
+   * This could also be adjusted lower to save space, at the cost of more
+   *   likely the user hits the limit.
+   */
+  static const uint16_t STORAGE_SIZE_IN_BYTES = 300;
 
-  static const uint8_t MAX_SLOTS_SIMULTANEOUSLY_IN_USE = 16;
-  // allow this many slots to be simultaneously in use.
-  // Adjusting this higher, again, uses more space (RAM);
-  //   adjusting it lower uses less space.
-  // If you want this to be as high as possible (i.e. equal to
-  //   the number of physical keys - 1), check out the all-slots
-  //   branch, which may have a few (both space and time) advantages
-  //   for that case vs. just changing the number here.
-  // Also, this can't ever be higher than 127 (currently), as some
-  //   code assumes that we can cover all in-use slot indexes with a
-  //   int8_t
+  /* the actual storage for macros */
+  static byte macroStorage[STORAGE_SIZE_IN_BYTES];
 
 #define UP WAS_PRESSED
 #define DOWN IS_PRESSED
 #define TAP (UP | DOWN)
 
-  // One entry is storage for one "keystroke" - either an up, down, or tap event for one key
+  /* one Entry is storage for one "keystroke" - either an up, down, or tap
+   *   event for one key
+   */
   typedef struct Entry_ {
     Key key;
     uint8_t state;  // UP, DOWN, or TAP
   } Entry;
 
-  static Entry macroStorage[STORAGE_SIZE_IN_KEYSTROKES];
-
+  /* Metadata / header for each macro stored
+   * A subtle assumption made by the code is that sizeof(Slot) >= sizeof(Entry)
+   *   which should always be the case, but I thought I'd document it
+   */
   typedef struct Slot_ {
-    uint8_t row, col;  // which physical key location this Slot is associated with
-                       // These fields will be invalid if allocatedSize == 0
-    uint8_t macroStart;  // index in macroStorage where this Slot's macro is stored
-    uint8_t usedSize;  // number of entries in macroStorage that this Slot's macro uses
-                        // (0 if the Slot is currently free / contains an empty macro)
-                        // Must not exceed allocatedSize.
-    uint8_t allocatedSize;  // number of entries in macroStorage that this Slot is currently allocated
-    uint8_t previousSlot;  // the Slot which holds the memory immediately before this Slot's.
-                           // This field will be invalid if macroStart == 0, or if allocatedSize == 0.
-    uint8_t nextSlot;  // the Slot which holds the memory immediately after this Slot's.
-                       // This field will be invalid if macroStart + allocatedSize == STORAGE_SIZE_IN_KEYSTROKES, or if allocatedSize == 0.
-  } Slot;
+    /* which physical key location this Slot is associated with, or (255, 255)
+     *   if not associated with any physical key.  In that case,
+     *   numUsedKeystrokes must be 0.
+     */
+    uint8_t row, col;
 
-  static Slot slots[MAX_SLOTS_SIMULTANEOUSLY_IN_USE];
+    /* Index in macroStorage of the previous Slot.
+     * For the first Slot in macroStorage, this will be set to a value higher
+     *   than STORAGE_SIZE_IN_BYTES.
+     */
+    uint16_t previousSlot;
+
+    /* Allocated size of the keystrokes[] array.  Assume <= 255 */
+    uint8_t numAllocatedKeystrokes;
+
+    /* Number of entries in keystrokes[] that this is actually using (can be 0)
+     * Must not exceed numAllocatedKeystrokes. If this is less than
+     *   numAllocatedKeystrokes, that indicates there is extra unused space
+     *   available between this Slot and the next
+     */
+    uint8_t numUsedKeystrokes;
+
+    /* Array of stored keystrokes. Size of this array is equal at all times to
+     *   numAllocatedKeystrokes, but only the first numUsedKeystrokes entries
+     *   contain valid data.
+     */
+    Entry keystrokes[0];
+  } Slot;
 
   typedef enum State_ {
     IDLE,
@@ -107,18 +119,73 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
     PICKING_SLOT_FOR_PLAY,  // Key_MacroPlay has been pressed, the next key chooses a slot
   } State;
   static State currentState;
+
+  /* are we currently recording a macro */
   static bool recording;
-  static uint8_t lastPlayedSlot;
 
-  static uint8_t recordingSlot;  // if we are currently recording, which slot index
-  static int8_t findSlot(uint8_t row, uint8_t col);  // gives the index of the Slot currently associated with (row, col); or if no such Slot, then a currently unassigned Slot; or if no such Slot and no unassigned Slots, then -1
+  /* if recording==TRUE, the index in macroStorage of the Slot we're recording
+   *   into
+   * if recording==TRUE, recordingSlot is guaranteed to be a valid Slot with
+   *   at least one allocated keystroke
+   */
+  static uint16_t recordingSlot;
 
-  static bool prepareForRecording(uint8_t row, uint8_t col);  // returns FALSE if there is no free space
-  static bool recordKeystroke(Key key, uint8_t key_state);  // returns FALSE if there was not enough room
-  static bool play(uint8_t slotnum);  // returns FALSE if the slot was empty
+  /* get the index in macroStorage of the Slot currently associated with
+   *   the physical key (row, col); or if no such Slot, then -1
+   */
+  static int16_t findSlot(uint8_t row, uint8_t col);
 
-  static void free(uint8_t slotnum);
-  static uint8_t getSlotWithMostExtraSpace();  // slot with the largest 'free' portion (allocated minus used)
+  /* allocate a new Slot associated with the physical key (row, col)
+   * One invariant maintained by the codebase is that any given physical key
+   *   only ever has at most one Slot associated with it.  This function will
+   *   not check/enforce that, so it is your responsibility to ensure there is
+   *   not already a slot for (row, col) before calling this
+   * The newly allocated Slot is guaranteed to have:
+   *   -> (row, col) set to the (row, col) you pass in
+   *   -> at least one allocated keystroke
+   *   -> numUsedKeystrokes set to 0
+   * Returns the index in macroStorage of the new slot; or if no room to create
+   *   a new Slot, then -1
+   */
+  static int16_t newSlot(uint8_t row, uint8_t col);
+
+  /* get the index in macroStorage of the Slot with the largest 'free' portion
+   *   as determined by getFreeSpace()
+   */
+  static uint16_t getSlotWithMostFreeSpace();
+
+  /* index: the index in macroStorage of any Slot
+   * returns the amount of free space in that slot, in bytes
+   *   (i.e. allocated space for keystrokes - used space for keystrokes)
+   *   with the complication that for any Slot not associated with a physical
+   *   key (i.e. (row,col) == (255,255)), the Slot struct itself also counts as
+   *   'free' space
+   */
+  static uint16_t getFreeSpace(uint16_t index);
+
+  /* prepare for recording into the slot associated with the physical key
+   *   (row, col)
+   * returns FALSE if there is not enough free space, TRUE otherwise
+   */
+  static bool prepareForRecording(uint8_t row, uint8_t col);
+
+  /* Record a keystroke into 'recordingSlot'.
+   * returns FALSE if there was not enough room, TRUE otherwise
+   */
+  static bool recordKeystroke(Key key, uint8_t key_state);
+
+  /* index: the index in macroStorage of the Slot to play
+   * returns FALSE if the slot was empty, TRUE otherwise
+   */
+  static bool play(uint16_t index);
+
+  /* the index in macroStorage of the Slot that was most recently played.
+   * This is guaranteed to point to a valid Slot at all times
+   */
+  static uint16_t lastPlayedSlot;
+
+  /* index: the index in macroStorage of the Slot to free */
+  static void free(uint16_t index);
 
   static Key eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state);
   static void loopHook(bool postClear);
@@ -132,8 +199,6 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
 
   // keep track of where Key_MacroRec and Key_MacroPlay are for LED purposes
   static uint8_t play_row, play_col, rec_row, rec_col;
-  // keep track of where the currently-recording-slot is for LED purposes
-  static uint8_t slot_row, slot_col;
 
   static FlashOverride flashOverride;
 };
