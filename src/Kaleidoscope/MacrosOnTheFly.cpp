@@ -152,14 +152,21 @@ bool MacrosOnTheFly::recordKeystroke(const Key key, const uint8_t key_state) {
   }
 
   Slot* slot = (Slot*)&macroStorage[recordingSlot];
-  if(slot->numUsedKeystrokes > 0  // at least one action already recorded
-      && keyToggledOff(key_state)) {
-    // If this is an UP, and the last action was a DOWN for the same key, combine these into a TAP.
-    // This can save a significant amount of storage for long macros that contain a lot of TAPs.
-    Entry& prev_entry = slot->keystrokes[slot->numUsedKeystrokes-1];  // the most recent entry recorded
-    if(prev_entry.key == key && prev_entry.state == DOWN) {
-      prev_entry.state = TAP;
+
+  if(keyToggledOff(key_state)) {  // i.e. this is an UP
+    if(slot->numUsedKeystrokes == 0) {
+      // Don't record an UP as the first keystroke.
+      // This applies in particular to not recording the UP event for the slot-selection key
+      //   but also in general for any keys that might have been held while initiating recording
       return true;
+    } else {  // at least one action already recorded
+      // If this is an UP, and the last action was a DOWN for the same key, combine these into a TAP.
+      // This can save a significant amount of storage for long macros that contain a lot of TAPs.
+      Entry& prev_entry = slot->keystrokes[slot->numUsedKeystrokes-1];  // the most recent entry recorded
+      if(prev_entry.key == key && prev_entry.state == DOWN) {
+        prev_entry.state = TAP;
+        return true;
+      }
     }
   }
 
@@ -255,6 +262,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
 
   if(currentState == PICKING_SLOT_FOR_PLAY) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
+      currentState = IDLE;  // do this first, so keypresses injected by playing the macro get handled with currentState==IDLE
       bool success;
       if(mapped_key.raw == MACROPLAY) {
         success = play(lastPlayedSlot);
@@ -269,7 +277,6 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
         if(success) LED_play_success();
         else LED_play_fail();
       }
-      currentState = IDLE;
       // mask out the key until release, so it doesn't register as a keystroke
       KeyboardHardware.maskKey(row, col);
     }
