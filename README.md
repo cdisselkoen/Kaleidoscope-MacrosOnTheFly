@@ -42,6 +42,25 @@ If you're excited by the ability to create custom key-sequences
 on demand that are tailored to your particular situation, and work in any
 application and context - this is the plugin for you!  Read on.
 
+## Installing this plugin
+
+Install this plugin as you would any other plugin.  Specifically:
+
+1. __Find your plugin directory.__  This is wherever you normally put plugins; it
+should be `$SKETCHBOOK_DIR/hardware/keyboardio/avr/libraries`, or at least
+accessible from there via symlink.  (If you don't know what a symlink is, don't
+worry - just use the `libraries` directory directly.)  `$SKETCHBOOK_DIR` is your
+Arduino sketchbook directory, perhaps `$HOME/Arduino` or `$HOME/Documents/Arduino`.
+2. __Install this plugin into your plugin directory__ using one of the below options.
+* __(Option 1 - using Git)__ Clone this Git repo into your plugin directory.  This can
+be done from the command line - just navigate to your plugin directory and type
+`git clone https://github.com/cdisselkoen/Kaleidoscope-MacrosOnTheFly`.
+* __(Option 2 - no Git or command-line required)__ Click the green "Clone or download"
+button at the top right of this page, and select "Download ZIP".  Then, unzip the
+folder in your plugin directory.
+
+You're done!  It was that easy.
+
 ## Using the plugin: firmware configuration
 
 To use the plugin, one needs to include the header, tell Kaleidoscope to `use`
