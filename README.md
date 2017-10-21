@@ -13,9 +13,9 @@ This plugin allows you to record and playback macros on-the-fly.  Do any
 sequence of keystrokes once, then repeat it with the tap of a button.  Some
 possible uses including typing some text over and over; invoking a complicated
 shortcut several times; or (for programmers like me) making the same modification
-to several different lines of code.  Furthermore, you can have up to 63
-different macros stored at once, and play back any of them at any time.  The
-possibilities are limited only by your imagination.
+to several different lines of code.  Furthermore, you can have as many different
+macros stored at once as you have keys on your keyboard, and play back any of them
+at any time.  The possibilities are limited only by your imagination.
 
 The organization and control scheme for MacrosOnTheFly is inspired by the
 similar feature in Vim.  Vim users should feel right at home.  This plugin
@@ -33,9 +33,9 @@ be cleared whenever the keyboard loses power, whereas macros from the Macros
 plugin are permanent (until you reflash your firmware, that is).
 
 If the only reason you want to use this plugin over Macros is because of its
-63 different macro slots, consider adding a new layer to your keymap and
-marking it up with macros from Macros (you can access this layer in any number
-of ways, including with a
+large number of available macro slots, consider adding a new layer to your
+keymap and marking it up with macros from Macros (you can access this layer in
+any number of ways, including with a
 ![OneShot](https://github.com/keyboardio/Kaleidoscope-OneShot) key).
 
 If you're excited by the ability to create custom key-sequences
@@ -159,20 +159,12 @@ public properties:
 After installing the firmware, you can use the `Key_MacroRec` and `Key_MacroPlay`
 keys to record and play back macros on-the-fly.
 
-MacrosOnTheFly provides 63 storage slots for macros; you can record and
-play back any of them at any time.  Each of these storage slots is
-represented by one of the physical keys on the keyboard, so you have a
-Slot `A`, a Slot `X`, a Slot `4`, a Slot `Enter` - even a slot for each
-thumb key and palm key.  The only exception is that whatever physical key
-the `Key_MacroPlay` key is bound to is not a slot - but if `Key_MacroRec`
-and `Key_MacroPlay` are on different physical keys, the `Key_MacroRec`
-key is a slot.  Regardless, you have exactly 63 slots.
-
-[Note: The above assumes you're using a Keyboardio Model 01 keyboard.
-If you're using Kaleidoscope on a different keyboard, everything works
-exactly the same, except that your number of storage slots is always
-exactly one less than the number of physical keys on the keyboard.
-Since the Model 01 has 64 physical keys, it has 63 storage slots.]
+MacrosOnTheFly provides a large number of storage slots for macros; you can
+record and play back any of them at any time.  Each of the keys on your
+keyboard is a storage slot, so you have a Slot `A`, a Slot `X`, a Slot `4`, a
+Slot `Enter` - even a slot for each thumb key and palm key.  The only exception
+is that the `Key_MacroPlay` key is not a slot - but `Key_MacroRec` is a slot.
+You can use any combination of these storage slots you want, at any time.
 
 ### Recording a macro
 
@@ -189,8 +181,7 @@ You can record pretty much any action into a macro: you can use modifiers,
 layer switches, and even other macros - either static macros created with
 ![Macros](https://github.com/keyboardio/Kaleidoscope-Macros), or other OnTheFly
 macros.  In any case, when you play back your recorded macro, it will repeat
-exactly the same actions, as if you had tapped the same sequence of physical
-keys again.
+exactly the same actions as you made when you recorded it.
 
 ### Playing back a macro
 

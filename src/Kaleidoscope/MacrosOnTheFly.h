@@ -84,11 +84,11 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
    *   which should always be the case, but I thought I'd document it
    */
   typedef struct Slot_ {
-    /* which physical key location this Slot is associated with, or (255, 255)
-     *   if not associated with any physical key.  In that case,
-     *   numUsedKeystrokes must be 0.
+    /* which key this Slot is associated with, or Key_NoKey if not associated
+     *   with any key.  In that case, numUsedKeystrokes must be 0.
+     * This is a "mapped" key, not a physical key - see issue #1.
      */
-    uint8_t row, col;
+    Key key;
 
     /* Index in macroStorage of the previous Slot.
      * For the first Slot in macroStorage, this will be set to a value higher
@@ -131,23 +131,23 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static uint16_t recordingSlot;
 
   /* get the index in macroStorage of the Slot currently associated with
-   *   the physical key (row, col); or if no such Slot, then -1
+   *   the given key; or if no such Slot, then -1
    */
-  static int16_t findSlot(uint8_t row, uint8_t col);
+  static int16_t findSlot(Key key);
 
-  /* allocate a new Slot associated with the physical key (row, col)
-   * One invariant maintained by the codebase is that any given physical key
-   *   only ever has at most one Slot associated with it.  This function will
-   *   not check/enforce that, so it is your responsibility to ensure there is
-   *   not already a slot for (row, col) before calling this
+  /* allocate a new Slot associated with the given key
+   * One invariant maintained by the codebase is that any given key only ever
+   *   has at most one Slot associated with it.  This function will not
+   *   check/enforce that, so it is your responsibility to ensure there is not
+   *   already a slot for the given key before calling this
    * The newly allocated Slot is guaranteed to have:
-   *   -> (row, col) set to the (row, col) you pass in
+   *   -> key set to the key you pass in
    *   -> at least one allocated keystroke
    *   -> numUsedKeystrokes set to 0
    * Returns the index in macroStorage of the new slot; or if no room to create
    *   a new Slot, then -1
    */
-  static int16_t newSlot(uint8_t row, uint8_t col);
+  static int16_t newSlot(Key key);
 
   /* get the index in macroStorage of the Slot with the largest 'free' portion
    *   as determined by getFreeSpace()
@@ -157,17 +157,15 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   /* index: the index in macroStorage of any Slot
    * returns the amount of free space in that slot, in bytes
    *   (i.e. allocated space for keystrokes - used space for keystrokes)
-   *   with the complication that for any Slot not associated with a physical
-   *   key (i.e. (row,col) == (255,255)), the Slot struct itself also counts as
-   *   'free' space
+   *   with the complication that for any Slot not associated with a key (i.e.
+   *   key == Key_NoKey), the Slot struct itself also counts as 'free' space
    */
   static uint16_t getFreeSpace(uint16_t index);
 
-  /* prepare for recording into the slot associated with the physical key
-   *   (row, col)
+  /* prepare for recording into the slot associated with the given key
    * returns FALSE if there is not enough free space, TRUE otherwise
    */
-  static bool prepareForRecording(uint8_t row, uint8_t col);
+  static bool prepareForRecording(Key key);
 
   /* Record a keystroke into 'recordingSlot'.
    * returns FALSE if there was not enough room, TRUE otherwise
@@ -197,8 +195,9 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static void LED_play_success();
   static void LED_play_fail();
 
-  // keep track of where Key_MacroRec and Key_MacroPlay are for LED purposes
-  static uint8_t play_row, play_col, rec_row, rec_col;
+  // keep track of where Key_MacroRec, Key_MacroPlay, and recordingSlot are
+  //   for LED purposes
+  static uint8_t play_row, play_col, rec_row, rec_col, slot_row, slot_col;
 
   static FlashOverride flashOverride;
 };

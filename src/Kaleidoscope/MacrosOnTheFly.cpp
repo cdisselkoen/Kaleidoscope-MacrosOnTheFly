@@ -30,8 +30,7 @@ namespace kaleidoscope {
 MacrosOnTheFly::MacrosOnTheFly(void) {
   // Initialize the 0th slot to indicate that the rest of the space is free
   Slot* slot = (Slot*)&macroStorage[0];
-  slot->row = 255;
-  slot->col = 255;
+  slot->key = Key_NoKey;
   slot->previousSlot = -1;  // previousSlot is unsigned, so this will give the max value the type can hold
   slot->numAllocatedKeystrokes = (STORAGE_SIZE_IN_BYTES - sizeof(Slot)) / sizeof(Entry);
   slot->numUsedKeystrokes = 0;
@@ -54,17 +53,19 @@ uint8_t MacrosOnTheFly::play_row;
 uint8_t MacrosOnTheFly::play_col;
 uint8_t MacrosOnTheFly::rec_row;
 uint8_t MacrosOnTheFly::rec_col;
+uint8_t MacrosOnTheFly::slot_row;
+uint8_t MacrosOnTheFly::slot_col;
 FlashOverride MacrosOnTheFly::flashOverride;
 
-bool MacrosOnTheFly::prepareForRecording(const uint8_t row, const uint8_t col) {
-  int16_t index = findSlot(row, col);
+bool MacrosOnTheFly::prepareForRecording(const Key key) {
+  int16_t index = findSlot(key);
   if(index >= 0) {
-    // this physical key already had a Slot associated with it
+    // this key already had a Slot associated with it
     // Clear out any macro that previously existed for this key so we can start anew
     free(index);
   }
-  // At this point we know there is no Slot associated with this physical key
-  index = newSlot(row, col);
+  // At this point we know there is no Slot associated with this key
+  index = newSlot(key);
   if(index < 0) return false;  // not enough room to create a new Slot
 
   recordingSlot = index;
@@ -75,8 +76,7 @@ void MacrosOnTheFly::free(const uint16_t index) {
   Slot* slot = (Slot*)&macroStorage[index];
   if(index == 0) {
     // don't actually delete the Slot structure, just mark it all as extra space
-    slot->row = 255;
-    slot->col = 255;
+    slot->key = Key_NoKey;
     slot->numUsedKeystrokes = 0;
   } else {
     // give all this slot's space, plus the space taken up by its Slot structure itself, to previous Slot
@@ -86,35 +86,33 @@ void MacrosOnTheFly::free(const uint16_t index) {
   }
 }
 
-int16_t MacrosOnTheFly::findSlot(const uint8_t row, const uint8_t col) {
+int16_t MacrosOnTheFly::findSlot(const Key key) {
   uint16_t index = 0;
   while(true) {
     Slot* slot = (Slot*)&macroStorage[index];
-    if(slot->row == row && slot->col == col) return index;
+    if(slot->key == key) return index;
     index += sizeof(Slot) + sizeof(Entry)*slot->numAllocatedKeystrokes;
     if(index > STORAGE_SIZE_IN_BYTES-sizeof(Slot)) return -1;
   }
 }
 
-int16_t MacrosOnTheFly::newSlot(const uint8_t row, const uint8_t col) {
+int16_t MacrosOnTheFly::newSlot(const Key key) {
   const uint16_t index = getSlotWithMostFreeSpace();
   const uint16_t freeSpace = getFreeSpace(index);  // technically getSlotWithMostFreeSpace() already computed this
   if(freeSpace < sizeof(Slot) + sizeof(Entry)) return false;  // not enough room for a 1-keystroke macro
 
   Slot* slot = (Slot*)&macroStorage[index];
-  if(slot->row == 255 && slot->col == 255) {
+  if(slot->key == Key_NoKey) {
     // take over this Slot entirely
-    slot->row = row;
-    slot->col = col;
-    // numUsedKeystrokes is already 0 - this is a property of (255,255) Slots
+    slot->key = key;
+    // numUsedKeystrokes is already 0 - this is a property of Key_NoKey Slots
     return index;
   } else {
     // allocate ourselves a Slot using all of this one's free space
     slot->numAllocatedKeystrokes = slot->numUsedKeystrokes;
     uint16_t newIndex = index + sizeof(Slot) + sizeof(Entry)*slot->numUsedKeystrokes;
     Slot* newSlot = (Slot*)&macroStorage[newIndex];
-    newSlot->row = row;
-    newSlot->col = col;
+    newSlot->key = key;
     newSlot->previousSlot = index;
     newSlot->numAllocatedKeystrokes = (freeSpace - sizeof(Slot)) / sizeof(Entry);
     newSlot->numUsedKeystrokes = 0;
@@ -141,7 +139,7 @@ uint16_t MacrosOnTheFly::getSlotWithMostFreeSpace() {
 uint16_t MacrosOnTheFly::getFreeSpace(uint16_t index) {
   Slot* slot = (Slot*)&macroStorage[index];
   uint16_t freeSpace = sizeof(Entry) * (slot->numAllocatedKeystrokes - slot->numUsedKeystrokes);
-  if(slot->row == 255 && slot->col == 255) freeSpace += sizeof(Slot);
+  if(slot->key == Key_NoKey) freeSpace += sizeof(Slot);
   return freeSpace;
 }
 
@@ -213,7 +211,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
 
   /* Injected keys:
    * While we're recording a macro, we don't want to record injected keys.  We'll record only
-   *   the physical keys pressed, and then during playback those keys will inject the same
+   *   the keys pressed by the user, and then during playback those keys will inject the same
    *   keys (or not, as appropriate - e.g. if the macro has changed).
    *   Yes, this means that if you include "play macro C" as part of recording for macro D,
    *   later playback of D will use the *current* value of C and not its value at time of recording.
@@ -237,7 +235,11 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
       if(mapped_key.raw == MACROPLAY) {
         if(colorEffects) LED_record_fail(row, col);  // Trying to record into the PLAY slot is error
       } else {
-        recording = prepareForRecording(row, col);
+        recording = prepareForRecording(mapped_key);
+        if(recording) {
+          slot_row = row;
+          slot_col = col;
+        }
         if(!recording && colorEffects) LED_record_fail(row, col);
 
         // mask out this key until it is released, so that we don't accidentally include it in the
@@ -286,7 +288,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
       if(mapped_key.raw == MACROPLAY) {
         success = play(lastPlayedSlot);
       } else {
-        int16_t index = findSlot(row,col);
+        int16_t index = findSlot(mapped_key);
         success = index >= 0 && play(index);
         if(success) lastPlayedSlot = index;
         // we ensure that lastPlayedSlot always points to a valid Slot
@@ -340,8 +342,7 @@ void MacrosOnTheFly::loopHook(bool postClear) {
       if(recording) {
         debug_print("IDLE, recording\n");
         ::LEDControl.setCrgbAt(rec_row, rec_col, recordColor);
-        Slot* slot = (Slot*)&macroStorage[recordingSlot];
-        ::LEDControl.setCrgbAt(slot->row, slot->col, slotColor);
+        ::LEDControl.setCrgbAt(slot_row, slot_col, slotColor);
       } else {
         debug_print("IDLE, not recording\n");
       }
