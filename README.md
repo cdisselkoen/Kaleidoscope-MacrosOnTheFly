@@ -89,10 +89,20 @@ Somewhere on the keymap, you should place the special keys `Key_MacroRec` and
 Note these keys can be on any layer or on different layers - they could
 even be the same key on different layers.
 
-[Known issue: if you use a momentary layer key to access `Key_MacroRec`, the
-momentary layer key may be 'stuck' after recording and/or playback, and
+Starting from a layout reasonably close to the default Model 01 QWERTY layout,
+some suggestions for places to put these keys are:
+* the `pgup` and `pgdn` keys
+* the `enter` key (if like me you use Fn-Space or some other key as 'enter')
+* the `tab` key (if like me you've remapped it somewhere else)
+* the `any` key
+* the `prog` key
+* the butterfly key
+
+[Known issue: if you use `Fn` or some other `ShiftToLayer()` key to access
+`Key_MacroRec`, that key may be 'stuck' after recording and/or playback, and
 require another tap to 'reset' to its normal state.  To avoid this issue,
-don't put `Key_MacroRec` on a layer you access with momentary layer keys.]
+don't put `Key_MacroRec` on a layer you access with a `ShiftToLayer()` key.
+Hopefully in the future this behavior will be fixed.  PRs welcome.]
 
 ## Using the plugin: Plugin properties
 
@@ -173,9 +183,9 @@ particular slot you want to record into.  Then type whatever sequence of
 keys you want to record.  Finally, to stop recording, tap the `Key_MacroRec`
 key again.  For example, the sequence:
 
-> `Key_MacroRec`, `Q`, `h`, `e`, `l`, `l`, `o`, `Key_MacroRec`
+> `Key_MacroRec`, `q`, `h`, `e`, `l`, `l`, `o`, `Key_MacroRec`
 
-records the five-key sequence "hello" into the `Q` slot.
+records the five-key sequence "hello" into the `q` slot.
 
 You can record pretty much any action into a macro: you can use modifiers,
 layer switches, and even other macros - either static macros created with
@@ -190,13 +200,13 @@ for the slot you want to play.  Alternately, double-tapping `Key_MacroPlay`
 will replay whichever macro you most recently played.  Continuing the
 example, from above, the sequence:
 
-> `Key_MacroPlay`, `Q`
+> `Key_MacroPlay`, `q`
 
 will type the five-key sequence "hello"; and then the sequence:
 
 > `Key_MacroPlay`, `Key_MacroPlay`
 
-(or just `Key_MacroPlay`+`Q` again) will type the five-key sequence "hello"
+(or just `Key_MacroPlay`+`q` again) will type the five-key sequence "hello"
 again.
 
 ## Limitations
