@@ -46,21 +46,21 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static cRGB emptyColor;
 
  private:
-  /* Number of bytes of RAM to reserve for macro storage.
+  /* STORAGE_SIZE_IN_BYTES: Number of bytes of RAM to reserve for macro storage.
    * Each slot used requires one Slot object from this, and each keystroke that
    *   is part of a macro requires one Entry object.
    * Currently this means 6 bytes per slot used, plus 3 bytes per keystroke
    *   stored across all recorded macros.
-   * Obviously this could be adjusted higher, at the cost of this plugin using
-   *   more space in the firmware image.
-   * To adjust this higher than sizeof(Slot) + 3*255 (so currently 771 bytes),
+   * Obviously STORAGE_SIZE_IN_BYTES could be adjusted higher, at the cost of
+   *   this plugin using more space in the firmware image.
+   * To adjust it higher than sizeof(Slot) + 3*255 (so currently 771 bytes),
    *   you'll need to increase numAllocatedKeystrokes to a uint16_t in the Slot
    *   object, and either also numUsedKeystrokes to uint16_t, or insert extra
    *   logic to limit numUsedKeystrokes to 255 even when numAllocatedKeystrokes
    *   is higher.  (Some local variables in MacrosOnTheFly.cpp may also need to
    *   be increased to uint16_t.)
-   * This could also be adjusted lower to save space, at the cost of more
-   *   likely the user hits the limit.
+   * STORAGE_SIZE_IN_BYTES could also be adjusted lower to save space, at the
+   *   cost of more likely the user hits the limit.
    */
   static const uint16_t STORAGE_SIZE_IN_BYTES = 300;
 

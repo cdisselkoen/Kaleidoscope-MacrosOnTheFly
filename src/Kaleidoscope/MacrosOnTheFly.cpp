@@ -302,6 +302,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     return Key_NoKey;
   }
 
+  // If we reach this point, we know the currentState must be IDLE
   if(mapped_key.raw == MACROPLAY) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
       play_row = row;
