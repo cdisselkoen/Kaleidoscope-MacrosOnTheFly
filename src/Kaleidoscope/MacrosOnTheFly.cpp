@@ -206,15 +206,31 @@ void MacrosOnTheFly::begin(void) {
 }
 
 Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state) {
-  // NOTE: this function alone, and not any of its callees, is responsible for
-  // the upkeep of the variables 'currentState', 'recording', and 'lastPlayedSlot'.
-  // No other function should modify them.
+  /* NOTE: this function alone, and not any of its callees, is responsible for
+   *   the upkeep of the variables 'currentState', 'recording', and 'lastPlayedSlot'.
+   * No other function should modify them.
+   */
 
-  if(key_state & INJECTED)
-    return mapped_key;  // We don't handle injected keys (either or own or from any other source).
-                        // If we're recording a macro, we record only the physical keys pressed,
-                        // and then during playback
-                        // those keys will inject the same keys (or not, as appropriate).
+  /* Injected keys:
+   * While we're recording a macro, we don't want to record injected keys.  We'll record only
+   *   the physical keys pressed, and then during playback those keys will inject the same
+   *   keys (or not, as appropriate - e.g. if the macro has changed).
+   *   Yes, this means that if you include "play macro C" as part of recording for macro D,
+   *   later playback of D will use the *current* value of C and not its value at time of recording.
+   * While we're not recording, though, we *do* want to handle injected keys, our own in
+   *   particular.  This is to enable the very feature described above.  For example, if
+   *   macro playback injects the MACROPLAY key, we definitely want to handle that normally.
+   * One more exception is that we don't want to allow entering recording mode during
+   *   playback.  It should be impossible to record a MACROREC keypress as part of a
+   *   macro (if you tried, the MACROREC key would just end the macro), but just in case
+   *   (or for the future, etc), we don't want to allow injected MACROREC to enter
+   *   recording mode.
+   * We don't want to blanket-ban injected MACROREC though - sometimes we do want to
+   *   handle injected MACROREC, for instance if it is used for slot selection in a
+   *   nested OnTheFly macro.
+   * In summary, we want to *handle* injected keys, but not *record* them or allow them
+   *   to initiate recording.
+   */
 
   if(currentState == PICKING_SLOT_FOR_REC) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
@@ -234,7 +250,9 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   }
 
   if(currentState == IDLE && mapped_key.raw == MACROREC) {
-    if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
+    if(keyToggledOn(key_state) && !(key_state & INJECTED)) {
+      // we only take action on ToggledOn events; and we don't enter recording mode
+      //   during playback (see notes on injected keys at the top of this function)
       rec_row = row;
       rec_col = col;
       if(recording) {
@@ -247,11 +265,12 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     return Key_NoKey;  // in any case, the key has been handled
   }
 
-  if(recording) {
+  if(recording && !(key_state & INJECTED)) {
     // Any key other than (idle) MACROREC during recording is recorded.
     // In particular, MACROPLAY is still recorded.  This means you can nest our macros,
     //   i.e. you can playback an on-the-fly macro as part of another on-the-fly macro.
     // This is a cool feature which we get for free with this ordering.
+    // We also don't record injected keys - see comments at the top of this function
     recording = recordKeystroke(mapped_key, key_state);
     if(!recording && colorEffects) LED_record_fail(row, col);
     // Keys typed during recording should also be handled normally (including keys
