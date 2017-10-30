@@ -47,6 +47,7 @@ cRGB MacrosOnTheFly::emptyColor = CRGB(255,0,0);
 byte MacrosOnTheFly::macroStorage[MacrosOnTheFly::STORAGE_SIZE_IN_BYTES];
 MacrosOnTheFly::State MacrosOnTheFly::currentState = MacrosOnTheFly::IDLE;
 bool MacrosOnTheFly::recording = false;
+bool MacrosOnTheFly::playing = false;
 uint16_t MacrosOnTheFly::recordingSlot;
 uint16_t MacrosOnTheFly::lastPlayedSlot = 0;
 uint8_t MacrosOnTheFly::play_row;
@@ -182,19 +183,80 @@ bool MacrosOnTheFly::recordKeystroke(const Key key, const uint8_t key_state) {
 }
 
 bool MacrosOnTheFly::play(const uint16_t index) {
+  Key pressedKeys[MAX_SIMULTANEOUS_HELD_KEYS];
+  clearPressedKeys(pressedKeys);
   Slot* slot = (Slot*)&macroStorage[index];
   for(uint8_t i = 0; i < slot->numUsedKeystrokes; i++) {
     Entry& entry = slot->keystrokes[i];
     if(keyIsPressed(entry.state)) {
-      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED | INJECTED);
+      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED);
       kaleidoscope::hid::sendKeyboardReport();
+      addToPressedKeys(entry.key, pressedKeys);
     }
     if(keyWasPressed(entry.state)) {
-      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, WAS_PRESSED | INJECTED);
+      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, WAS_PRESSED);
+      removeFromPressedKeys(entry.key, pressedKeys);
+      // Since we're injecting keyswitch events without the INJECTED flag,
+      //   release events may not properly register if we simply inject like this.
+      // Therefore, we simulate the Kaleidoscope core's "new scan cycle"
+      //   process after every release event - namely, we clear all keys and
+      //   re-press the held ones.
+      kaleidoscope::hid::releaseAllKeys();
+      pressPressedKeys(pressedKeys);
       kaleidoscope::hid::sendKeyboardReport();
     }
   }
+  // release all keys at macro end
+  kaleidoscope::hid::releaseAllKeys();
+  kaleidoscope::hid::sendKeyboardReport();
   return (slot->numUsedKeystrokes > 0);
+}
+
+void MacrosOnTheFly::addToPressedKeys(Key key, Key* pressedKeys) {
+  // An implicit assumption is that no key appears twice in pressedKeys.
+  //   (This assumption is important in removeFromPressedKeys() below.)
+  // Caller is responsible for making sure they don't call addToPressedKeys()
+  //   on a key already in pressedKeys; but currently this should be
+  //   impossible - we can't have two D events for the same key without a U
+  //   event in between.
+  for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
+    if(pressedKeys[i].raw == Key_NoKey.raw) {
+      pressedKeys[i].raw = key.raw;
+      i++;
+      if(i < MAX_SIMULTANEOUS_HELD_KEYS) pressedKeys[i].raw = Key_NoKey.raw;
+      break;
+    }
+  }
+  // if we reached the end of the loop and still haven't put the key in, then
+  //   we already have 16 pressed keys.
+  // Right now, we're going to handle this by simply not adding this key (the
+  //   17th) to pressedKeys.  For further consequences see notes in
+  //   MacrosOnTheFly.h
+}
+
+void MacrosOnTheFly::removeFromPressedKeys(Key key, Key* pressedKeys) {
+  bool copying = false;
+  for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
+    if(copying) pressedKeys[i].raw = pressedKeys[i+1].raw;
+    if(pressedKeys[i].raw == Key_NoKey.raw) break;
+    if(pressedKeys[i].raw == key.raw) {
+      copying = true;
+      pressedKeys[i].raw = pressedKeys[i+1].raw;
+    }
+  }
+}
+
+void MacrosOnTheFly::pressPressedKeys(Key* pressedKeys) {
+  for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
+    Key key = pressedKeys[i];
+    if(key.raw == Key_NoKey.raw) break;
+    handleKeyswitchEvent(key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED | WAS_PRESSED);
+      // IS_PRESSED | WAS_PRESSED indicates "still held"
+  }
+}
+
+void MacrosOnTheFly::clearPressedKeys(Key* pressedKeys) {
+  pressedKeys[0].raw = Key_NoKey.raw;
 }
 
 void MacrosOnTheFly::begin(void) {
@@ -205,8 +267,8 @@ void MacrosOnTheFly::begin(void) {
 
 Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state) {
   /* NOTE: this function alone, and not any of its callees, is responsible for
-   *   the upkeep of the variables 'currentState', 'recording', and 'lastPlayedSlot'.
-   * No other function should modify them.
+   *   the upkeep of the variables 'currentState', 'recording', 'playing', and
+   *   'lastPlayedSlot'.  No other function should modify them.
    */
 
   /* Injected keys:
@@ -228,7 +290,15 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
    *   nested OnTheFly macro.
    * In summary, we want to *handle* injected keys, but not *record* them or allow them
    *   to initiate recording.
+   * Also, for correct interaction with other plugins, during playback we need to inject
+   *   events without the INJECTED flag.  (Specifically, other plugins need to handle
+   *   these events exactly as if they were organically-occurring.)  Instead of using the
+   *   INJECTED flag, while playback is in progress we set the 'playing' flag, and
+   *   everywhere that checks for INJECTED flag should also check 'playing' and treat
+   *   them as equivalent - i.e. a keypress is injected if it has INJECTED || playing.
    */
+
+  bool isInjected = (key_state & INJECTED) || playing;  // see notes above
 
   if(currentState == PICKING_SLOT_FOR_REC) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
@@ -252,7 +322,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   }
 
   if(currentState == IDLE && mapped_key.raw == MACROREC) {
-    if(keyToggledOn(key_state) && !(key_state & INJECTED)) {
+    if(keyToggledOn(key_state) && !isInjected) {
       // we only take action on ToggledOn events; and we don't enter recording mode
       //   during playback (see notes on injected keys at the top of this function)
       rec_row = row;
@@ -267,7 +337,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     return Key_NoKey;  // in any case, the key has been handled
   }
 
-  if(recording && !(key_state & INJECTED)) {
+  if(recording && !isInjected) {
     // Any key other than (idle) MACROREC during recording is recorded.
     // In particular, MACROPLAY is still recorded.  This means you can nest our macros,
     //   i.e. you can playback an on-the-fly macro as part of another on-the-fly macro.
@@ -284,6 +354,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   if(currentState == PICKING_SLOT_FOR_PLAY) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
       currentState = IDLE;  // do this first, so keypresses injected by playing the macro get handled with currentState==IDLE
+      playing = true;
       bool success;
       if(mapped_key.raw == MACROPLAY) {
         success = play(lastPlayedSlot);
@@ -294,6 +365,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
         // we ensure that lastPlayedSlot always points to a valid Slot
         //   (and not, for instance, -1)
       }
+      playing = false;
       if(colorEffects) {
         if(success) LED_play_success();
         else LED_play_fail();

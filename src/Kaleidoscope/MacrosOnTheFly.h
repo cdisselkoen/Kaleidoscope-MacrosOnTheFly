@@ -123,6 +123,9 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   /* are we currently recording a macro */
   static bool recording;
 
+  /* are we currently playing a macro */
+  static bool playing;
+
   /* if recording==TRUE, the index in macroStorage of the Slot we're recording
    *   into
    * if recording==TRUE, recordingSlot is guaranteed to be a valid Slot with
@@ -198,6 +201,19 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   // keep track of where Key_MacroRec, Key_MacroPlay, and recordingSlot are
   //   for LED purposes
   static uint8_t play_row, play_col, rec_row, rec_col, slot_row, slot_col;
+
+  // Maximum number of simultaneously held keys during a dynamic macro.
+  // If MAX_SIMULTANEOUS_HELD_KEYS are held, you can still tap additional keys,
+  //   you just can't hold any more (they will be instantly released)
+  // This means that inside dynamic macros, we only support 16-key rollover
+  //   (or whatever the value of MAX_SIMULTANEOUS_HELD_KEYS), not true NKRO.
+  // Increasing this number by N increases local variables' RAM usage by
+  //   2*N*(playback recursion depth)
+  static const uint8_t MAX_SIMULTANEOUS_HELD_KEYS = 16;
+  static void addToPressedKeys(Key key, Key* pressedKeys);
+  static void removeFromPressedKeys(Key key, Key* pressedKeys);
+  static void pressPressedKeys(Key* pressedKeys);
+  static void clearPressedKeys(Key* pressedKeys);
 
   static FlashOverride flashOverride;
 };
