@@ -37,6 +37,7 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
 
   // basically everything else, public and private, has to be static so that
   // it can be called/accessed in our eventHandlerHook and/or loopHook
+  static bool modsAreSlots;
   static bool colorEffects;
   static cRGB recordColor;
   static cRGB slotColor;

@@ -109,6 +109,17 @@ Hopefully in the future this behavior will be fixed.  PRs welcome.]
 The plugin provides the `MacrosOnTheFly` object, which has the following
 public properties:
 
+### `.modsAreSlots`
+
+> If this is set to `true`, then modifier keys (like Shift, Control, etc) and
+> layer keys (both `ShiftToLayer()` and `LockLayer()` keys) will be usable
+> slots in their own right - i.e. you will have a Shift slot, a Control slot,
+> etc.  If this is set to `false` (the default), then modifier and layer keys
+> are **not** their own slots, but instead unlock entire additional "layers"
+> of slots - i.e. `k`, `Shift+k`, `Ctrl+k`, `Alt+k`, and even `Shift+Ctrl+k` or
+> `Ctrl+Alt+k` etc are all different macro slots.  Likewise, you will also have
+> slots for any keys on other layers of your keyboard.
+
 ### `.colorEffects`
 
 > If this is set to `true` (the default), the keyboard will use various
