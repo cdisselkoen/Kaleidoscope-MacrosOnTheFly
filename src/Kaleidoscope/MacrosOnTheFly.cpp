@@ -330,29 +330,28 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   bool isInjected = (key_state & INJECTED) || playing;  // see notes above
 
   if(currentState == PICKING_SLOT_FOR_REC) {
-    if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
-      if(!modsAreSlots && isModifier(mapped_key)) {
-        // if this is a modifier, and we're not using modifiers as slots
-        //   themselves, then just let the modifier be handled normally -
-        //   it could be used to modify the slot-choice key
-        return mapped_key;
-      }
-      if(mapped_key.raw == MACROPLAY) {
-        if(colorEffects) LED_record_fail(row, col);  // Trying to record into the PLAY slot is error
-      } else {
-        addModifierFlags(&mapped_key);
-        recording = prepareForRecording(mapped_key);
-        if(recording) {
-          slot_row = row;
-          slot_col = col;
-        }
-        if(!recording && colorEffects) LED_record_fail(row, col);
-      }
-      currentState = IDLE;
-      // mask out this key until it is released, so that we don't accidentally include it in the
-      //   recorded macro, or (if recording failed) it doesn't register as a keystroke
-      KeyboardHardware.maskKey(row, col);
+    if(!keyToggledOn(key_state)) return mapped_key;  // we only take action on ToggledOn events
+    if(!modsAreSlots && isModifier(mapped_key)) {
+      // if this is a modifier, and we're not using modifiers as slots
+      //   themselves, then just let the modifier be handled normally -
+      //   it could be used to modify the slot-choice key
+      return mapped_key;
     }
+    if(mapped_key.raw == MACROPLAY) {
+      if(colorEffects) LED_record_fail(row, col);  // Trying to record into the PLAY slot is error
+    } else {
+      addModifierFlags(&mapped_key);
+      recording = prepareForRecording(mapped_key);
+      if(recording) {
+        slot_row = row;
+        slot_col = col;
+      }
+      if(!recording && colorEffects) LED_record_fail(row, col);
+    }
+    currentState = IDLE;
+    // mask out this key until it is released, so that we don't accidentally include it in the
+    //   recorded macro, or (if recording failed) it doesn't register as a keystroke
+    KeyboardHardware.maskKey(row, col);
     return Key_NoKey;
   }
 
@@ -387,35 +386,34 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   }
 
   if(currentState == PICKING_SLOT_FOR_PLAY) {
-    if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
-      if(!modsAreSlots && isModifier(mapped_key)) {
-        // if this is a modifier, and we're not using modifiers as slots
-        //   themselves, then just let the modifier be handled normally -
-        //   it could be used to modify the slot-choice key
-        return mapped_key;
-      }
-      addModifierFlags(&mapped_key);
-      // at this point, we have selected a slot and will play a macro
-      currentState = IDLE;  // do this first, so keypresses injected by playing the macro get handled with currentState==IDLE
-      playing = true;
-      bool success;
-      if(mapped_key.raw == MACROPLAY) {
-        success = play(lastPlayedSlot);
-      } else {
-        int16_t index = findSlot(mapped_key);
-        success = index >= 0 && play(index);
-        if(success) lastPlayedSlot = index;
-        // we ensure that lastPlayedSlot always points to a valid Slot
-        //   (and not, for instance, -1)
-      }
-      playing = false;
-      if(colorEffects) {
-        if(success) LED_play_success();
-        else LED_play_fail();
-      }
-      // mask out the key until release, so it doesn't register as a keystroke
-      KeyboardHardware.maskKey(row, col);
+    if(!keyToggledOn(key_state)) return mapped_key;  // we only take action on ToggledOn events
+    if(!modsAreSlots && isModifier(mapped_key)) {
+      // if this is a modifier, and we're not using modifiers as slots
+      //   themselves, then just let the modifier be handled normally -
+      //   it could be used to modify the slot-choice key
+      return mapped_key;
     }
+    addModifierFlags(&mapped_key);
+    // at this point, we have selected a slot and will play a macro
+    currentState = IDLE;  // do this first, so keypresses injected by playing the macro get handled with currentState==IDLE
+    playing = true;
+    bool success;
+    if(mapped_key.raw == MACROPLAY) {
+      success = play(lastPlayedSlot);
+    } else {
+      int16_t index = findSlot(mapped_key);
+      success = index >= 0 && play(index);
+      if(success) lastPlayedSlot = index;
+      // we ensure that lastPlayedSlot always points to a valid Slot
+      //   (and not, for instance, -1)
+    }
+    playing = false;
+    if(colorEffects) {
+      if(success) LED_play_success();
+      else LED_play_fail();
+    }
+    // mask out the key until release, so it doesn't register as a keystroke
+    KeyboardHardware.maskKey(row, col);
     return Key_NoKey;
   }
 

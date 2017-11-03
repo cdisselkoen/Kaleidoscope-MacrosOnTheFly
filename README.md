@@ -98,12 +98,6 @@ some suggestions for places to put these keys are:
 * the `prog` key
 * the butterfly key
 
-[Known issue: if you use `Fn` or some other `ShiftToLayer()` key to access
-`Key_MacroRec`, that key may be 'stuck' after recording and/or playback, and
-require another tap to 'reset' to its normal state.  To avoid this issue,
-don't put `Key_MacroRec` on a layer you access with a `ShiftToLayer()` key.
-Hopefully in the future this behavior will be fixed.  PRs welcome.]
-
 ## Using the plugin: Plugin properties
 
 The plugin provides the `MacrosOnTheFly` object, which has the following
