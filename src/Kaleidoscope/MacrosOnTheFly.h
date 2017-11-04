@@ -196,8 +196,8 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static void LED_record_slotindicator(uint8_t row, uint8_t col);
   static void LED_record_fail(uint8_t row, uint8_t col);
   static void LED_record_success(uint8_t row, uint8_t col);
-  static void LED_play_success();
-  static void LED_play_fail();
+  static void LED_play_success(uint8_t row, uint8_t col);
+  static void LED_play_fail(uint8_t row, uint8_t col);
 
   // keep track of where Key_MacroRec, Key_MacroPlay, and recordingSlot are
   //   for LED purposes

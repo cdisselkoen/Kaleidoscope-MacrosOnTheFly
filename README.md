@@ -172,9 +172,10 @@ public properties:
 > * If a macro-record option fails (for instance, if you exceed the
 >   storage capacity), the whole keyboard will momentarily flash red.
 > * When a macro playback completes, the `Key_MacroPlay` key will momentarily
->   flash green.
+>   flash green and the played slot will momentarily flash white.
 > * If you try to playback a macro slot which you haven't recorded
->   anything into, the `Key_MacroPlay` key will momentarily flash red.
+>   anything into, the `Key_MacroPlay` key and the selected slot will
+>   momentarily flash red.
 >
 > The specific colors mentioned above are the defaults, and can be
 > customized using the properties below.
@@ -192,8 +193,8 @@ public properties:
 
 ### `.slotColor`
 
-> The color to use for the selected slot's key during recording. Default
-> is `CRGB(255,255,255)`.
+> The color to use for the selected slot's key during recording or after
+> successful playback. Default is `CRGB(255,255,255)`.
 
 ### `.successColor`
 
@@ -213,8 +214,9 @@ public properties:
 
 ### `.emptyColor`
 
-> The color to momentarily flash the `Key_MacroPlay` key if there is no
-> macro recorded in the selected slot.  Default is `CRGB(255,0,0)`.
+> The color to momentarily flash the `Key_MacroPlay` key and the selected
+> slot's key if there is no macro recorded in the selected slot.  Default is
+> `CRGB(255,0,0)`.
 
 ## Limitations
 

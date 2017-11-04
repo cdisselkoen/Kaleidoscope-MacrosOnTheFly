@@ -409,8 +409,8 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     }
     playing = false;
     if(colorEffects) {
-      if(success) LED_play_success();
-      else LED_play_fail();
+      if(success) LED_play_success(row, col);
+      else LED_play_fail(row, col);
     }
     // mask out the key until release, so it doesn't register as a keystroke
     KeyboardHardware.maskKey(row, col);
@@ -438,12 +438,14 @@ void MacrosOnTheFly::LED_record_success(const uint8_t row, const uint8_t col) {
   flashOverride.flashAllLEDs(successColor);
 }
 
-void MacrosOnTheFly::LED_play_success() {
+void MacrosOnTheFly::LED_play_success(const uint8_t row, const uint8_t col) {
   flashOverride.flashLED(play_row, play_col, playColor);
+  flashOverride.flashSecondLED(row, col, slotColor);
 }
 
-void MacrosOnTheFly::LED_play_fail() {
+void MacrosOnTheFly::LED_play_fail(const uint8_t row, const uint8_t col) {
   flashOverride.flashLED(play_row, play_col, emptyColor);
+  flashOverride.flashSecondLED(row, col, emptyColor);
 }
 
 void MacrosOnTheFly::loopHook(bool postClear) {
