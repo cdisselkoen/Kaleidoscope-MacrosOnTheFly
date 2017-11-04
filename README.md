@@ -44,7 +44,7 @@ application and context - this is the plugin for you!  Read on.
 
 ## Installing this plugin
 
-Install this plugin as you would any other plugin.  Specifically:
+Install this plugin as you would any other 3rd-party plugin.  Specifically:
 
 1. __Find your plugin directory.__  This is wherever you normally put plugins; it
 should be `$SKETCHBOOK_DIR/hardware/keyboardio/avr/libraries`, or at least
@@ -61,9 +61,9 @@ folder in your plugin directory.
 
 You're done!  It was that easy.
 
-## Using the plugin: firmware configuration
+## Adding the plugin to your sketch
 
-To use the plugin, one needs to include the header, tell Kaleidoscope to `use`
+To activate the plugin, one needs to include the header, tell Kaleidoscope to `use`
 the plugin, and place the `Key_MacroRec` and `Key_MacroPlay` keys on the keymap.
 
 In general, this plugin desires to be as early as possible in the
@@ -94,11 +94,58 @@ some suggestions for places to put these keys are:
 * the `pgup` and `pgdn` keys
 * the `enter` key (if like me you use Fn-Space or some other key as 'enter')
 * the `tab` key (if like me you've remapped it somewhere else)
+* `Fn-q` (if you like similarity to Vim)
+* `Fn-;` or `Fn-'` (both empty in the default firmware)
 * the `any` key
 * the `prog` key
 * the butterfly key
 
-## Using the plugin: Plugin properties
+## Using the plugin
+
+After installing the firmware, you can use the `Key_MacroRec` and `Key_MacroPlay`
+keys to record and play back macros on-the-fly.
+
+MacrosOnTheFly provides a large number of storage slots for macros; you can
+record and play back any of them at any time.  Each of the keys on your
+keyboard is a storage slot, so you have a Slot `A`, a Slot `X`, a Slot `4`, a
+Slot `Enter` - even a slot for each thumb key and palm key.  The only exception
+is that the `Key_MacroPlay` key is not a slot - but `Key_MacroRec` is a slot.
+You can use any combination of these storage slots you want, at any time.
+
+### Recording a macro
+
+To start recording, tap the `Key_MacroRec` key followed by the key for the
+particular slot you want to record into.  Then type whatever sequence of
+keys you want to record.  Finally, to stop recording, tap the `Key_MacroRec`
+key again.  For example, the sequence:
+
+> `Key_MacroRec`, `q`, `h`, `e`, `l`, `l`, `o`, `Key_MacroRec`
+
+records the five-key sequence "hello" into the `q` slot.
+
+You can record pretty much any action into a macro: you can use modifiers,
+layer switches, and even other macros - either static macros created with
+![Macros](https://github.com/keyboardio/Kaleidoscope-Macros), or other OnTheFly
+macros.  In any case, when you play back your recorded macro, it will repeat
+exactly the same actions as you made when you recorded it.
+
+### Playing back a macro
+
+To play back a macro, simply tap the `Key_MacroPlay` key followed by the key
+for the slot you want to play.  Alternately, double-tapping `Key_MacroPlay`
+will replay whichever macro you most recently played.  Continuing the
+example, from above, the sequence:
+
+> `Key_MacroPlay`, `q`
+
+will type the five-key sequence "hello"; and then the sequence:
+
+> `Key_MacroPlay`, `Key_MacroPlay`
+
+(or just `Key_MacroPlay`+`q` again) will type the five-key sequence "hello"
+again.
+
+## Plugin options
 
 The plugin provides the `MacrosOnTheFly` object, which has the following
 public properties:
@@ -169,51 +216,6 @@ public properties:
 > The color to momentarily flash the `Key_MacroPlay` key if there is no
 > macro recorded in the selected slot.  Default is `CRGB(255,0,0)`.
 
-## Using the plugin: Actually using it!
-
-After installing the firmware, you can use the `Key_MacroRec` and `Key_MacroPlay`
-keys to record and play back macros on-the-fly.
-
-MacrosOnTheFly provides a large number of storage slots for macros; you can
-record and play back any of them at any time.  Each of the keys on your
-keyboard is a storage slot, so you have a Slot `A`, a Slot `X`, a Slot `4`, a
-Slot `Enter` - even a slot for each thumb key and palm key.  The only exception
-is that the `Key_MacroPlay` key is not a slot - but `Key_MacroRec` is a slot.
-You can use any combination of these storage slots you want, at any time.
-
-### Recording a macro
-
-To start recording, tap the `Key_MacroRec` key followed by the key for the
-particular slot you want to record into.  Then type whatever sequence of
-keys you want to record.  Finally, to stop recording, tap the `Key_MacroRec`
-key again.  For example, the sequence:
-
-> `Key_MacroRec`, `q`, `h`, `e`, `l`, `l`, `o`, `Key_MacroRec`
-
-records the five-key sequence "hello" into the `q` slot.
-
-You can record pretty much any action into a macro: you can use modifiers,
-layer switches, and even other macros - either static macros created with
-![Macros](https://github.com/keyboardio/Kaleidoscope-Macros), or other OnTheFly
-macros.  In any case, when you play back your recorded macro, it will repeat
-exactly the same actions as you made when you recorded it.
-
-### Playing back a macro
-
-To play back a macro, simply tap the `Key_MacroPlay` key followed by the key
-for the slot you want to play.  Alternately, double-tapping `Key_MacroPlay`
-will replay whichever macro you most recently played.  Continuing the
-example, from above, the sequence:
-
-> `Key_MacroPlay`, `q`
-
-will type the five-key sequence "hello"; and then the sequence:
-
-> `Key_MacroPlay`, `Key_MacroPlay`
-
-(or just `Key_MacroPlay`+`q` again) will type the five-key sequence "hello"
-again.
-
 ## Limitations
 
 * There is a finite amount of storage available in your keyboard.  In the
@@ -231,12 +233,6 @@ keyboard off and on, which will clear all your stored macros.
 the keyboard loses power.  If you want your macros to stay in the keyboard
 even after it loses power, use the
 ![Macros](https://github.com/keyboardio/Kaleidoscope-Macros) plugin instead.
-
-* RAM usage used to be a big problem for this plugin, but is no longer.
-By my measurements, it's now at about 50 bytes + whatever you set aside for
-macros (`STORAGE_SIZE_IN_BYTES` in the code), which is currently defaulted
-to 300 for a total of 350 bytes.  Those concerned about RAM usage can always
-set aside less space for macros.
 
 ## Dependencies
 
