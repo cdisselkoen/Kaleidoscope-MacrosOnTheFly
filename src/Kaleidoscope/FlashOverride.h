@@ -20,7 +20,7 @@ class FlashOverride {
   // temporarily flash all LEDs a given color, overriding the current LEDMode
   static void flashAllLEDs(cRGB crgb);
 
-  void begin(void);
+  kaleidoscope::EventHandlerResult afterEachCycle();
 
  protected:
   static const int16_t flashLengthInLoops = 200;  // length in loopHook() calls
@@ -38,8 +38,6 @@ class FlashOverride {
   static uint8_t secondLEDRow;
   static uint8_t secondLEDCol;
   static cRGB secondColor;
-
-  static void loopHook(bool postClear);
 
  private:
   // return control of any flashed LEDs back to the active LEDMode

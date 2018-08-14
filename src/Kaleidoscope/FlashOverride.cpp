@@ -38,14 +38,8 @@ void FlashOverride::flashAllLEDs(cRGB crgb) {
   flashColor = crgb;
 }
 
-void FlashOverride::begin(void) {
-  Kaleidoscope.useLoopHook(loopHook);
-}
-
-void FlashOverride::loopHook(bool postClear) {
-  if(!postClear) return;  // we want to go last, to override active LEDMode
-
-  if(flashCounter == -1) return;
+kaleidoscope::EventHandlerResult FlashOverride::afterEachCycle() {
+  if(flashCounter == -1) return kaleidoscope::EventHandlerResult::OK;
 
   if(flashCounter == 0) {
     // newly done flashing.  Restore previous LEDMode.
@@ -60,6 +54,7 @@ void FlashOverride::loopHook(bool postClear) {
   }
 
   flashCounter--;
+  return kaleidoscope::EventHandlerResult::OK;
 }
 
 void FlashOverride::unFlash() {

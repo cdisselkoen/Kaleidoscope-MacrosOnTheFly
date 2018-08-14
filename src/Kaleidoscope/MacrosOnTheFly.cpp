@@ -261,12 +261,6 @@ void MacrosOnTheFly::clearPressedKeys(Key* pressedKeys) {
   pressedKeys[0].raw = Key_NoKey.raw;
 }
 
-void MacrosOnTheFly::begin(void) {
-  Kaleidoscope.useEventHandlerHook(eventHandlerHook);
-  Kaleidoscope.useLoopHook(loopHook);
-  flashOverride.begin();
-}
-
 // Returns TRUE for modifier or layer keys
 // This is (at least at the time of this writing) the same detection logic as
 //   used by Kaleidoscope-LED-ActiveModColor
@@ -294,7 +288,7 @@ static void addModifierFlags(Key* key) {
     key->flags |= GUI_HELD;
 }
 
-Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state) {
+kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_key, byte row, byte col, uint8_t key_state) {
   /* NOTE: this function alone, and not any of its callees, is responsible for
    *   the upkeep of the variables 'currentState', 'recording', 'playing', and
    *   'lastPlayedSlot'.  No other function should modify them.
@@ -330,12 +324,12 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   bool isInjected = (key_state & INJECTED) || playing;  // see notes above
 
   if(currentState == PICKING_SLOT_FOR_REC) {
-    if(!keyToggledOn(key_state)) return mapped_key;  // we only take action on ToggledOn events
+    if(!keyToggledOn(key_state)) return kaleidoscope::EventHandlerResult::OK;  // we only take action on ToggledOn events
     if(!modsAreSlots && isModifier(mapped_key)) {
       // if this is a modifier, and we're not using modifiers as slots
       //   themselves, then just let the modifier be handled normally -
       //   it could be used to modify the slot-choice key
-      return mapped_key;
+      return kaleidoscope::EventHandlerResult::OK;
     }
     if(mapped_key.raw == MACROPLAY) {
       if(colorEffects) LED_record_fail(row, col);  // Trying to record into the PLAY slot is error
@@ -352,7 +346,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     // mask out this key until it is released, so that we don't accidentally include it in the
     //   recorded macro, or (if recording failed) it doesn't register as a keystroke
     KeyboardHardware.maskKey(row, col);
-    return Key_NoKey;
+    return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
   }
 
   if(currentState == IDLE && mapped_key.raw == MACROREC) {
@@ -368,7 +362,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
         currentState = PICKING_SLOT_FOR_REC;
       }
     }
-    return Key_NoKey;  // in any case, the key has been handled
+    return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;  // in any case, the key has been handled
   }
 
   if(recording && !isInjected) {
@@ -386,12 +380,12 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
   }
 
   if(currentState == PICKING_SLOT_FOR_PLAY) {
-    if(!keyToggledOn(key_state)) return mapped_key;  // we only take action on ToggledOn events
+    if(!keyToggledOn(key_state)) return kaleidoscope::EventHandlerResult::OK;  // we only take action on ToggledOn events
     if(!modsAreSlots && isModifier(mapped_key)) {
       // if this is a modifier, and we're not using modifiers as slots
       //   themselves, then just let the modifier be handled normally -
       //   it could be used to modify the slot-choice key
-      return mapped_key;
+      return kaleidoscope::EventHandlerResult::OK;
     }
     addModifierFlags(&mapped_key);
     // at this point, we have selected a slot and will play a macro
@@ -414,7 +408,7 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
     }
     // mask out the key until release, so it doesn't register as a keystroke
     KeyboardHardware.maskKey(row, col);
-    return Key_NoKey;
+    return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
   }
 
   // If we reach this point, we know the currentState must be IDLE
@@ -424,10 +418,10 @@ Key MacrosOnTheFly::eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t
       play_col = col;
       currentState = PICKING_SLOT_FOR_PLAY;
     }
-    return Key_NoKey;
+    return kaleidoscope::EventHandlerResult::OK;
   }
 
-  return mapped_key;
+  return kaleidoscope::EventHandlerResult::OK;
 }
 
 void MacrosOnTheFly::LED_record_fail(const uint8_t row, const uint8_t col) {
@@ -448,9 +442,8 @@ void MacrosOnTheFly::LED_play_fail(const uint8_t row, const uint8_t col) {
   flashOverride.flashSecondLED(row, col, emptyColor);
 }
 
-void MacrosOnTheFly::loopHook(bool postClear) {
-  if(!colorEffects) return;
-  if(!postClear) return;
+kaleidoscope::EventHandlerResult MacrosOnTheFly::afterEachCycle() {
+  if(!colorEffects) return kaleidoscope::EventHandlerResult::OK;
   debug_print("MacrosOnTheFly: currentState ");
   switch(currentState) {
     case IDLE:
@@ -473,6 +466,7 @@ void MacrosOnTheFly::loopHook(bool postClear) {
       debug_print("bad\n");
       break;
   }
+  return flashOverride.afterEachCycle();
 }
 
 }
