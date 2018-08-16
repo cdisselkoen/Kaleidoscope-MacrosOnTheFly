@@ -418,7 +418,7 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_ke
       play_col = col;
       currentState = PICKING_SLOT_FOR_PLAY;
     }
-    return kaleidoscope::EventHandlerResult::OK;
+    return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
   }
 
   return kaleidoscope::EventHandlerResult::OK;
