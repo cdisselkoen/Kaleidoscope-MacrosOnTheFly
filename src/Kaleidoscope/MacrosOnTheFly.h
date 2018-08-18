@@ -33,8 +33,6 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
  public:
   MacrosOnTheFly(void);
 
-  void begin(void) final;
-
   // basically everything else, public and private, has to be static so that
   // it can be called/accessed in our eventHandlerHook and/or loopHook
   static bool modsAreSlots;
@@ -45,6 +43,9 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
   static cRGB failColor;
   static cRGB playColor;
   static cRGB emptyColor;
+
+  kaleidoscope::EventHandlerResult onKeyswitchEvent(Key &mapped_key, byte row, byte col, uint8_t key_state);
+  kaleidoscope::EventHandlerResult afterEachCycle();
 
  private:
   /* STORAGE_SIZE_IN_BYTES: Number of bytes of RAM to reserve for macro storage.
@@ -188,9 +189,6 @@ class MacrosOnTheFly : public KaleidoscopePlugin {
 
   /* index: the index in macroStorage of the Slot to free */
   static void free(uint16_t index);
-
-  static Key eventHandlerHook(Key mapped_key, byte row, byte col, uint8_t key_state);
-  static void loopHook(bool postClear);
 
   static void LED_record_inprogress();
   static void LED_record_slotindicator(uint8_t row, uint8_t col);
