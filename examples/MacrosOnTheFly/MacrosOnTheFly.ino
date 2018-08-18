@@ -39,8 +39,9 @@ const Key keymaps[][ROWS][COLS] PROGMEM = {
     Key_NoKey),
 };
 
+KALEIDOSCOPE_INIT_PLUGINS(MacrosOnTheFly)
+
 void setup() {
-  Kaleidoscope.use(&MacrosOnTheFly);
   Kaleidoscope.setup();
 }
 

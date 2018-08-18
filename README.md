@@ -1,14 +1,5 @@
 # Kaleidoscope-MacrosOnTheFly
 
-![status][st:experimental] [![Build Status][travis:image]][travis:status]
-
- [travis:image]: https://travis-ci.org/keyboardio/Kaleidoscope-MacrosOnTheFly.svg?branch=master
- [travis:status]: https://travis-ci.org/keyboardio/Kaleidoscope-MacrosOnTheFly
-
- [st:stable]: https://img.shields.io/badge/stable-✔-black.svg?style=flat&colorA=44cc11&colorB=494e52
- [st:broken]: https://img.shields.io/badge/broken-X-black.svg?style=flat&colorA=e05d44&colorB=494e52
- [st:experimental]: https://img.shields.io/badge/experimental----black.svg?style=flat&colorA=dfb317&colorB=494e52
-
 This plugin allows you to record and playback macros on-the-fly.  Do any
 sequence of keystrokes once, then repeat it with the tap of a button.  Some
 possible uses including typing some text over and over; invoking a complicated
@@ -63,11 +54,11 @@ You're done!  It was that easy.
 
 ## Adding the plugin to your sketch
 
-To activate the plugin, one needs to include the header, tell Kaleidoscope to `use`
+To activate the plugin, one needs to include the header, tell Kaleidoscope to use
 the plugin, and place the `Key_MacroRec` and `Key_MacroPlay` keys on the keymap.
 
 In general, this plugin desires to be as early as possible in the
-`Kaleidoscope.use()` order, so that it can catch all keypresses before other
+`KALEIDOSCOPE_INIT_PLUGINS` order, so that it can catch all keypresses before other
 plugins try to handle them.  There may be exceptions.
 
 ### Setup operations in the firmware sketch (example):
@@ -76,10 +67,7 @@ plugins try to handle them.  There may be exceptions.
 #include <Kaleidoscope.h>
 #include <Kaleidoscope-MacrosOnTheFly.h>
 
-void setup (){
-  Kaleidoscope.use(&MacrosOnTheFly);
-  Kaleidoscope.setup();
-}
+KALEIDOSCOPE_INIT_PLUGINS(MacrosOnTheFly);
 ```
 
 ### Keymap markup
