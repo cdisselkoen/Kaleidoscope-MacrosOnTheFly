@@ -29,7 +29,7 @@
 
 namespace kaleidoscope {
 
-class MacrosOnTheFly : public KaleidoscopePlugin {
+class MacrosOnTheFly : public kaleidoscope::Plugin {
  public:
   MacrosOnTheFly(void);
 
