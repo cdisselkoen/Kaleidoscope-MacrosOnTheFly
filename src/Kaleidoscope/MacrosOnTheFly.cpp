@@ -52,12 +52,9 @@ bool MacrosOnTheFly::recording = false;
 bool MacrosOnTheFly::playing = false;
 uint16_t MacrosOnTheFly::recordingSlot;
 uint16_t MacrosOnTheFly::lastPlayedSlot = 0;
-uint8_t MacrosOnTheFly::play_row;
-uint8_t MacrosOnTheFly::play_col;
-uint8_t MacrosOnTheFly::rec_row;
-uint8_t MacrosOnTheFly::rec_col;
-uint8_t MacrosOnTheFly::slot_row;
-uint8_t MacrosOnTheFly::slot_col;
+KeyAddr MacrosOnTheFly::play_key_addr;
+KeyAddr MacrosOnTheFly::rec_key_addr;
+KeyAddr MacrosOnTheFly::slot_key_addr;
 FlashOverride MacrosOnTheFly::flashOverride;
 
 bool MacrosOnTheFly::prepareForRecording(const Key key) {
@@ -191,26 +188,26 @@ bool MacrosOnTheFly::play(const uint16_t index) {
   for(uint8_t i = 0; i < slot->numUsedKeystrokes; i++) {
     Entry& entry = slot->keystrokes[i];
     if(keyIsPressed(entry.state)) {
-      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED);
-      kaleidoscope::hid::sendKeyboardReport();
+      handleKeyswitchEvent(entry.key, UnknownKeyswitchLocation, IS_PRESSED);
+      Kaleidoscope.hid().keyboard().sendReport();
       addToPressedKeys(entry.key, pressedKeys);
     }
     if(keyWasPressed(entry.state)) {
-      handleKeyswitchEvent(entry.key, UNKNOWN_KEYSWITCH_LOCATION, WAS_PRESSED);
+      handleKeyswitchEvent(entry.key, UnknownKeyswitchLocation, WAS_PRESSED);
       removeFromPressedKeys(entry.key, pressedKeys);
       // Since we're injecting keyswitch events without the INJECTED flag,
       //   release events may not properly register if we simply inject like this.
       // Therefore, we simulate the Kaleidoscope core's "new scan cycle"
       //   process after every release event - namely, we clear all keys and
       //   re-press the held ones.
-      kaleidoscope::hid::releaseAllKeys();
+      Kaleidoscope.hid().keyboard().releaseAllKeys();
       pressPressedKeys(pressedKeys);
-      kaleidoscope::hid::sendKeyboardReport();
+      Kaleidoscope.hid().keyboard().sendReport();
     }
   }
   // release all keys at macro end
-  kaleidoscope::hid::releaseAllKeys();
-  kaleidoscope::hid::sendKeyboardReport();
+  Kaleidoscope.hid().keyboard().releaseAllKeys();
+  Kaleidoscope.hid().keyboard().sendReport();
   return (slot->numUsedKeystrokes > 0);
 }
 
@@ -222,10 +219,10 @@ void MacrosOnTheFly::addToPressedKeys(Key key, Key* pressedKeys) {
   //   impossible - we can't have two D events for the same key without a U
   //   event in between.
   for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
-    if(pressedKeys[i].raw == Key_NoKey.raw) {
-      pressedKeys[i].raw = key.raw;
+    if(pressedKeys[i].getRaw() == Key_NoKey.getRaw()) {
+      pressedKeys[i].setRaw(key.getRaw());
       i++;
-      if(i < MAX_SIMULTANEOUS_HELD_KEYS) pressedKeys[i].raw = Key_NoKey.raw;
+      if(i < MAX_SIMULTANEOUS_HELD_KEYS) pressedKeys[i].setRaw(Key_NoKey.getRaw());
       break;
     }
   }
@@ -239,11 +236,11 @@ void MacrosOnTheFly::addToPressedKeys(Key key, Key* pressedKeys) {
 void MacrosOnTheFly::removeFromPressedKeys(Key key, Key* pressedKeys) {
   bool copying = false;
   for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
-    if(copying) pressedKeys[i].raw = pressedKeys[i+1].raw;
-    if(pressedKeys[i].raw == Key_NoKey.raw) break;
-    if(pressedKeys[i].raw == key.raw) {
+    if(copying) pressedKeys[i].setRaw(pressedKeys[i+1].getRaw());
+    if(pressedKeys[i].getRaw() == Key_NoKey.getRaw()) break;
+    if(pressedKeys[i].getRaw() == key.getRaw()) {
       copying = true;
-      pressedKeys[i].raw = pressedKeys[i+1].raw;
+      pressedKeys[i].setRaw(pressedKeys[i+1].getRaw());
     }
   }
 }
@@ -251,44 +248,45 @@ void MacrosOnTheFly::removeFromPressedKeys(Key key, Key* pressedKeys) {
 void MacrosOnTheFly::pressPressedKeys(Key* pressedKeys) {
   for(uint8_t i = 0; i < MAX_SIMULTANEOUS_HELD_KEYS; i++) {
     Key key = pressedKeys[i];
-    if(key.raw == Key_NoKey.raw) break;
-    handleKeyswitchEvent(key, UNKNOWN_KEYSWITCH_LOCATION, IS_PRESSED | WAS_PRESSED);
+    if(key.getRaw() == Key_NoKey.getRaw()) break;
+    handleKeyswitchEvent(key, UnknownKeyswitchLocation, IS_PRESSED | WAS_PRESSED);
       // IS_PRESSED | WAS_PRESSED indicates "still held"
   }
 }
 
 void MacrosOnTheFly::clearPressedKeys(Key* pressedKeys) {
-  pressedKeys[0].raw = Key_NoKey.raw;
+  pressedKeys[0].setRaw(Key_NoKey.getRaw());
 }
 
 // Returns TRUE for modifier or layer keys
 // This is (at least at the time of this writing) the same detection logic as
 //   used by Kaleidoscope-LED-ActiveModColor
 static bool isModifier(Key key) {
-  return (key.raw >= Key_LeftControl.raw && key.raw <= Key_RightGui.raw) ||
-    (key.flags == (SYNTHETIC | SWITCH_TO_KEYMAP));
+  return (key.getRaw() >= Key_LeftControl.getRaw() && key.getRaw() <= Key_RightGui.getRaw()) ||
+    (key.getFlags() == (SYNTHETIC | SWITCH_TO_KEYMAP));
 }
 
 // Adds flags to the 'flags' field of the key according to what is currently held
 static void addModifierFlags(Key* key) {
   // we use wasModifierKeyActive() rather than isModifierKeyActive() because the
   //   latter may not be accurate yet for this scan cycle
-  if(kaleidoscope::hid::wasModifierKeyActive(Key_LeftControl)
-      || kaleidoscope::hid::wasModifierKeyActive(Key_RightControl))
-    key->flags |= CTRL_HELD;
-  if(kaleidoscope::hid::wasModifierKeyActive(Key_LeftShift)
-      || kaleidoscope::hid::wasModifierKeyActive(Key_RightShift))
-    key->flags |= SHIFT_HELD;
-  if(kaleidoscope::hid::wasModifierKeyActive(Key_LeftAlt))
-    key->flags |= LALT_HELD;
-  if(kaleidoscope::hid::wasModifierKeyActive(Key_RightAlt))
-    key->flags |= RALT_HELD;
-  if(kaleidoscope::hid::wasModifierKeyActive(Key_LeftGui)
-      || kaleidoscope::hid::wasModifierKeyActive(Key_RightGui))
-    key->flags |= GUI_HELD;
+
+  if(Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_LeftControl)
+      || Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_RightControl))
+    key->setFlags(key->getFlags() | CTRL_HELD);
+  if(Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_LeftShift)
+      || Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_RightShift))
+    key->setFlags(key->getFlags() | SHIFT_HELD);
+  if(Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_LeftAlt))
+    key->setFlags(key->getFlags() | LALT_HELD);
+  if(Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_RightAlt))
+    key->setFlags(key->getFlags() | RALT_HELD);
+  if(Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_LeftGui)
+      || Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_RightGui))
+    key->setFlags(key->getFlags() | GUI_HELD);
 }
 
-kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_key, byte row, byte col, uint8_t key_state) {
+kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_key, KeyAddr key_addr, uint8_t key_state) {
   /* NOTE: this function alone, and not any of its callees, is responsible for
    *   the upkeep of the variables 'currentState', 'recording', 'playing', and
    *   'lastPlayedSlot'.  No other function should modify them.
@@ -331,33 +329,31 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_ke
       //   it could be used to modify the slot-choice key
       return kaleidoscope::EventHandlerResult::OK;
     }
-    if(mapped_key.raw == MACROPLAY) {
-      if(colorEffects) LED_record_fail(row, col);  // Trying to record into the PLAY slot is error
+    if(mapped_key.getRaw() == MACROPLAY) {
+      if(colorEffects) LED_record_fail(key_addr.row(), key_addr.col());  // Trying to record into the PLAY slot is error
     } else {
       addModifierFlags(&mapped_key);
       recording = prepareForRecording(mapped_key);
       if(recording) {
-        slot_row = row;
-        slot_col = col;
+        slot_key_addr = key_addr;
       }
-      if(!recording && colorEffects) LED_record_fail(row, col);
+      if(!recording && colorEffects) LED_record_fail(key_addr.row(), key_addr.col());
     }
     currentState = IDLE;
     // mask out this key until it is released, so that we don't accidentally include it in the
     //   recorded macro, or (if recording failed) it doesn't register as a keystroke
-    KeyboardHardware.maskKey(row, col);
+    Kaleidoscope.device().maskKey(key_addr);
     return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
   }
 
-  if(currentState == IDLE && mapped_key.raw == MACROREC) {
+  if(currentState == IDLE && mapped_key.getRaw() == MACROREC) {
     if(keyToggledOn(key_state) && !isInjected) {
       // we only take action on ToggledOn events; and we don't enter recording mode
       //   during playback (see notes on injected keys at the top of this function)
-      rec_row = row;
-      rec_col = col;
+      rec_key_addr = key_addr;
       if(recording) {
         recording = false;
-        if(colorEffects) LED_record_success(row, col);
+        if(colorEffects) LED_record_success(key_addr.row(), key_addr.col());
       } else {
         currentState = PICKING_SLOT_FOR_REC;
       }
@@ -372,7 +368,7 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_ke
     // This is a cool feature which we get for free with this ordering.
     // We also don't record injected keys - see comments at the top of this function
     recording = recordKeystroke(mapped_key, key_state);
-    if(!recording && colorEffects) LED_record_fail(row, col);
+    if(!recording && colorEffects) LED_record_fail(key_addr.row(), key_addr.col());
     // Keys typed during recording should also be handled normally (including keys
     // controlling macro playback), so we fall through and continue handling the keys
     // as normal, through the macro-playback hooks below or else by the 'return
@@ -392,7 +388,7 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_ke
     currentState = IDLE;  // do this first, so keypresses injected by playing the macro get handled with currentState==IDLE
     playing = true;
     bool success;
-    if(mapped_key.raw == MACROPLAY) {
+    if(mapped_key.getRaw() == MACROPLAY) {
       success = play(lastPlayedSlot);
     } else {
       int16_t index = findSlot(mapped_key);
@@ -403,19 +399,18 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::onKeyswitchEvent(Key &mapped_ke
     }
     playing = false;
     if(colorEffects) {
-      if(success) LED_play_success(row, col);
-      else LED_play_fail(row, col);
+      if(success) LED_play_success(key_addr.row(), key_addr.col());
+      else LED_play_fail(key_addr.row(), key_addr.col());
     }
     // mask out the key until release, so it doesn't register as a keystroke
-    KeyboardHardware.maskKey(row, col);
+    Kaleidoscope.device().maskKey(key_addr);
     return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
   }
 
   // If we reach this point, we know the currentState must be IDLE
-  if(mapped_key.raw == MACROPLAY) {
+  if(mapped_key.getRaw() == MACROPLAY) {
     if(keyToggledOn(key_state)) {  // we only take action on ToggledOn events
-      play_row = row;
-      play_col = col;
+      play_key_addr = key_addr;
       currentState = PICKING_SLOT_FOR_PLAY;
     }
     return kaleidoscope::EventHandlerResult::EVENT_CONSUMED;
@@ -433,12 +428,12 @@ void MacrosOnTheFly::LED_record_success(const uint8_t row, const uint8_t col) {
 }
 
 void MacrosOnTheFly::LED_play_success(const uint8_t row, const uint8_t col) {
-  flashOverride.flashLED(play_row, play_col, playColor);
+  flashOverride.flashLED(play_key_addr.row(), play_key_addr.col(), playColor);
   flashOverride.flashSecondLED(row, col, slotColor);
 }
 
 void MacrosOnTheFly::LED_play_fail(const uint8_t row, const uint8_t col) {
-  flashOverride.flashLED(play_row, play_col, emptyColor);
+  flashOverride.flashLED(play_key_addr.row(), play_key_addr.col(), emptyColor);
   flashOverride.flashSecondLED(row, col, emptyColor);
 }
 
@@ -449,15 +444,15 @@ kaleidoscope::EventHandlerResult MacrosOnTheFly::afterEachCycle() {
     case IDLE:
       if(recording) {
         debug_print("IDLE, recording\n");
-        ::LEDControl.setCrgbAt(rec_row, rec_col, recordColor);
-        ::LEDControl.setCrgbAt(slot_row, slot_col, slotColor);
+        ::LEDControl.setCrgbAt(rec_key_addr, recordColor);
+        ::LEDControl.setCrgbAt(slot_key_addr, slotColor);
       } else {
         debug_print("IDLE, not recording\n");
       }
       break;
     case PICKING_SLOT_FOR_REC:
       debug_print("PICKING_SLOT_FOR_REC\n");
-      ::LEDControl.setCrgbAt(rec_row, rec_col, recordColor);
+      ::LEDControl.setCrgbAt(rec_key_addr, recordColor);
       break;
     case PICKING_SLOT_FOR_PLAY:
       debug_print("PICKING_SLOT_FOR_PLAY\n");

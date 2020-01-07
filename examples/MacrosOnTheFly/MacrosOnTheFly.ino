@@ -19,7 +19,7 @@
 #include <Kaleidoscope.h>
 #include <Kaleidoscope-MacrosOnTheFly.h>
 
-const Key keymaps[][ROWS][COLS] PROGMEM = {
+const Key keymaps[][Kaleidoscope.device().matrix_rows][Kaleidoscope.device().matrix_columns] PROGMEM = {
   [0] = KEYMAP_STACKED
   (
     Key_skip, Key_1, Key_2, Key_3, Key_4, Key_5, Key_skip,
