@@ -44,7 +44,7 @@ class MacrosOnTheFly : public kaleidoscope::Plugin {
   static cRGB playColor;
   static cRGB emptyColor;
 
-  kaleidoscope::EventHandlerResult onKeyswitchEvent(Key &mapped_key, byte row, byte col, uint8_t key_state);
+  kaleidoscope::EventHandlerResult onKeyswitchEvent(Key &mapped_key, KeyAddr key_addr, uint8_t key_state);
   kaleidoscope::EventHandlerResult afterEachCycle();
 
  private:
@@ -199,7 +199,10 @@ class MacrosOnTheFly : public kaleidoscope::Plugin {
 
   // keep track of where Key_MacroRec, Key_MacroPlay, and recordingSlot are
   //   for LED purposes
-  static uint8_t play_row, play_col, rec_row, rec_col, slot_row, slot_col;
+  static KeyAddr play_key_addr;
+  static KeyAddr rec_key_addr;
+  static KeyAddr slot_key_addr;
+
 
   // Maximum number of simultaneously held keys during a dynamic macro.
   // If MAX_SIMULTANEOUS_HELD_KEYS are held, you can still tap additional keys,
